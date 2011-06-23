@@ -16,6 +16,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
 # 02111-1307, USA.
 #
+import psutil
 from  MonitorPlugins import MonitorPlugin, Plot
 
 class MonitorCUs(MonitorPlugin):
@@ -38,24 +39,13 @@ class MonitorMemFree(MonitorPlugin):
     plots = [Plot(plot1, title="Memory usage", unit="kB")]
 
     def getStat(self):
-        meminfo_fields = ["MemTotal", "MemFree", "SwapTotal", "SwapFree", "Buffers", "Cached"]
-        meminfo = open("/proc/meminfo")
-        kernel_rev = self._checkKernelRev()
-        if kernel_rev <= 2.4:
-            # Kernel 2.4 has extra lines of info, duplicate of later info
-            meminfo.readline()
-            meminfo.readline()
-            meminfo.readline()
-        lines = meminfo.readlines()
-        meminfo.close()
-        meminfo_stats = {}
-        for line in lines:
-            line = line[:-1]
-            stats = line.split()
-            field = stats[0][:-1]
-            if field in meminfo_fields:
-                meminfo_stats[field[0].lower()+field[1:]] = stats[1]
-        return meminfo_stats
+        return {'memTotal': psutil.TOTAL_PHYMEM,
+                'memFree': psutil.avail_phymem(),
+                'swapTotal': psutil.total_virtmem(),
+                'swapFree': psutil.avail_virtmem(),
+                'buffers': psutil.phymem_buffers(),
+                'cached': psutil.cached_phymem()}
+
 
     def parseStats(self, stats):
         if not (hasattr(stats[0], 'memTotal') and
@@ -89,27 +79,20 @@ class MonitorCPU(MonitorPlugin):
 
     def _getCPU(self):
         """Read the current system cpu usage from /proc/stat."""
-        lines = open("/proc/stat").readlines()
-        for line in lines:
-            #print "l = %s" % line
-            l = line.split()
-            if len(l) < 5:
-                continue
-            if l[0].startswith('cpu'):
-                # cpu = sum of usr, nice, sys
-                cpu = long(l[1]) + long(l[2]) + long(l[3])
-                idl = long(l[4])
-                return {'CPUTotalJiffies': cpu,
-                        'IDLTotalJiffies': idl,
-                        }
-        return {}
+        cputime = psutil.cpu_times()
+
+        total_jiffies = cputime.system + cputime.idle + cputime.user
+        idle_jiffies = cputime.idle
+
+        return {'CPUTotalJiffies': total_jiffies,
+                'IDLTotalJiffies': idle_jiffies}
+
 
     def _getLoad(self):
         """Read the current system load from /proc/loadavg."""
-        loadavg = open("/proc/loadavg").readline()
-        loadavg = loadavg[:-1]
-        # Contents are space separated:
-        # 5, 10, 15 min avg. load, running proc/total threads, last pid
+        loadavg = open("/proc/loadavg").readline().strip()
+        # Contents are space separate
+        # <load1> <load5> <load15> <running process>, <total threads>, <last pid>
         stats = loadavg.split()
         running = stats[3].split("/")
         load_stats = {}
@@ -131,14 +114,11 @@ class MonitorCPU(MonitorPlugin):
                     hasattr(stats[i-1], 'CPUTotalJiffies')):
                 cpu_usage.append(None)
             else:
-                dt = ((long(stats[i].IDLTotalJiffies) +
-                       long(stats[i].CPUTotalJiffies)) -
-                      (long(stats[i-1].IDLTotalJiffies) +
-                       long(stats[i-1].CPUTotalJiffies)))
+                dt_idl = float(stats[i].IDLTotalJiffies) - float(stats[i-1].IDLTotalJiffies)
+                dt_cpu = float(stats[i].CPUTotalJiffies) - float(stats[i-1].CPUTotalJiffies)
+                dt = dt_idl + dt_cpu
                 if dt:
-                    ttl = (float(long(stats[i].CPUTotalJiffies) -
-                                 long(stats[i-1].CPUTotalJiffies)) /
-                           dt)
+                    ttl = dt_cpu / dt
                 else:
                     ttl = None
                 cpu_usage.append(ttl)
@@ -165,32 +145,32 @@ class MonitorNetwork(MonitorPlugin):
 
     def getStat(self):
         """Read the stats from an interface."""
-        ifaces = open( "/proc/net/dev" )
+        ifaces = open("/proc/net/dev")
         # Skip the information banner
         ifaces.readline()
         ifaces.readline()
         # Read the rest of the lines
         lines = ifaces.readlines()
         ifaces.close()
-        # Process the interface lines
-        net_stats = {}
         for line in lines:
             # Parse the interface line
             # Interface is followed by a ':' and then bytes, possibly with
             # no spaces between : and bytes
-            line = line[:-1]
-            (device, data) = line.split(':')
+            line = line.strip()
+            (device, sep, data) = line.partition(':')
 
             # Get rid of leading spaces
             device = device.lstrip()
-            # get the stats
+
+            if device != self.interface:
+                continue
+
             stats = data.split()
-            if device == self.interface:
-                net_stats['receiveBytes'] = stats[0]
-                net_stats['receivePackets'] = stats[1]
-                net_stats['transmitBytes'] = stats[8]
-                net_stats['transmitPackets'] = stats[9]
-        return net_stats
+            return {'receiveBytes': stats[0],
+                    'receivePackets': stats[1],
+                    'transmitBytes': stats[8],
+                    'transmitPackets': stats[9]}
+        return {}
 
     def parseStats(self, stats):
         if not (hasattr(stats[0], 'transmitBytes') or
