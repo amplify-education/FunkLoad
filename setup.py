@@ -21,9 +21,13 @@
 """FunkLoad package setup
 
 """
-import ez_setup
-ez_setup.use_setuptools()
-from setuptools import setup, find_packages
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    import ez_setup
+    ez_setup.use_setuptools()
+    from setuptools import setup, find_packages
+
 __version__ = '1.16.0'
 
 setup(
