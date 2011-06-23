@@ -32,6 +32,7 @@ class FunkLoadConfigXmlParser:
         self.cycles = None
         self.cycle_duration = 0
         self.nodes = {}
+        self.stats_files = 0
         self.config = {}
         self.files = []
         self.current_file = None
@@ -83,6 +84,8 @@ class FunkLoadConfigXmlParser:
                 self.cycles = attrs['value']
             elif attrs['key'] == 'node':
                 self.nodes[self.current_file] = attrs['value']
+            elif attrs['key'] == 'stats_only':
+                self.stats_files += 1
         else:
             self.files.append(self.current_file)
             raise EndOfConfig
@@ -102,11 +105,16 @@ class MergeResultFiles:
             trace (".")
             xml_parser.parse(input_file)
 
-        node_count = len(xml_parser.files)
+        node_count = len(xml_parser.files) - xml_parser.stats_files
 
         # compute cumulated cycles
-        node_cycles = [int(item) for item in xml_parser.cycles[1:-1].split(',')]
+        node_cycles = [int(cycle.strip())
+                       for cycle in xml_parser.cycles[1:-1].split(',')
+                       if cycle]
         cycles = map(lambda x: x * node_count, node_cycles)
+
+        # If we don't have any node cycles, we'll assume that this doesn't hold
+        # valid data.
 
         # node names
         node_names = []
