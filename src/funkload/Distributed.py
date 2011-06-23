@@ -26,13 +26,12 @@ from datetime import datetime
 from socket import error as SocketError
 from stat import S_ISREG, S_ISDIR
 from glob import glob
-from socket import error as SocketError
 from stat import S_ISREG, S_ISDIR
 from xml.etree.ElementTree import ElementTree
-from xmlrpclib import ServerProxy
 
 import paramiko
 
+from stats import StatsCollector
 from utils import mmn_encode, trace, package_tests, get_virtualenv_script, \
                   get_version
 
@@ -444,31 +443,38 @@ class DistributionMgr(threading.Thread):
         threads = []
         trace("* Starting %d workers" % len(self._workers))
 
-        self.startMonitors()
-        for worker in self._workers:
-            venv = os.path.join(self.remote_res_dir, self.tarred_testsdir)
-            obj = worker.threaded_execute(
-                'bin/fl-run-bench %s' % self.cmd_args,
-                cwdir=venv)
-            trace(".")
-            threads.append(obj)
-        trace("\n")
-        [t.join() for t in threads]
-        trace("\n")
+        config = {'id': self.test_id,
+                  'configuration_file': self.config_path,
+                  'server_url': self.test_url,
+                  'python_version': platform.python_version(),
+                  'stats_only': True}
+        for (host, port, desc) in self.monitor_hosts:
+            config[host] = desc
 
-        for thread, worker in zip(threads, self._workers):
-            self._worker_results[worker] = thread.output.read()
-            trace("* [%s] returned\n" % worker.host)
-            err_string = thread.err.read()
-            if err_string:
-                trace("\n".join("  [%s]: %s" % (worker.host, k) for k \
-                        in err_string.split("\n") if k.strip()))
+        with StatsCollector(self.monitor_hosts,
+                            output_dir=self.distribution_output,
+                            config=config):
+            for worker in self._workers:
+                venv = os.path.join(self.remote_res_dir, self.tarred_testsdir)
+                obj = worker.threaded_execute(
+                    'bin/fl-run-bench %s' % self.cmd_args,
+                    cwdir=venv)
+                trace(".")
+                threads.append(obj)
+            trace("\n")
+            [t.join() for t in threads]
             trace("\n")
 
-        self.stopMonitors()
-        self.logr_close()
+            for thread, worker in zip(threads, self._workers):
+                self._worker_results[worker] = thread.output.read()
+                trace("* [%s] returned\n" % worker.host)
+                err_string = thread.err.read()
+                if err_string:
+                    trace("\n".join("  [%s]: %s" % (worker.host, k) for k \
+                            in err_string.split("\n") if k.strip()))
+                trace("\n")
 
-        self.stopMonitors()
+        self.final_collect()
         self.correlate_statistics()
 
     def final_collect(self):
@@ -484,43 +490,6 @@ class DistributionMgr(threading.Thread):
                 worker.get(remote_file, local_file)
                 trace("* Received bench log from [%s] into %s\n" % (
                     worker.host, local_file))
-
-    def startMonitors(self):
-        """Start monitoring on hosts list."""
-        if not self.monitor_hosts:
-            return
-        monitor_hosts = []
-        monitor_key = "%s:0:0" % self.method_name
-        for (host, port, desc) in self.monitor_hosts:
-            trace("* Start monitoring %s: ..." % host)
-            server = ServerProxy("http://%s:%s" % (host, port))
-            try:
-                server.startRecord(monitor_key)
-            except SocketError:
-                trace(' failed, server is down.\n')
-            else:
-                trace(' done.\n')
-                monitor_hosts.append((host, port, desc))
-        self.monitor_hosts = monitor_hosts
-
-    def stopMonitors(self):
-        """Stop monitoring and save xml result."""
-        if not self.monitor_hosts:
-            return
-        monitor_key = "%s:0:0" % self.method_name
-        successful_results = []
-        for (host, port, desc) in self.monitor_hosts:
-            trace('* Stop monitoring %s: ' % host)
-            server = ServerProxy("http://%s:%s" % (host, port))
-            try:
-                server.stopRecord(monitor_key)
-                successful_results.append(server.getXmlResult(monitor_key))
-            except SocketError:
-                trace(' failed, server is down.\n')
-            else:
-                trace(' done.\n')
-
-        self.write_statistics(successful_results)
 
     def write_statistics(self, successful_results):
         """ Write the distributed stats to a file in the output dir """
@@ -621,7 +590,7 @@ class DistributionMgr(threading.Thread):
         for stat in stats:
             adj_time = float(stat.attrib['time']) * ratio
             cycle, cvus = find_range(adj_time)
-            key, cycle_, cvus_ = stat.attrib['key'].partition(':')
-            stat.attrib['key'] = "%s:%d:%d" % (key, cycle, cvus)
+            stat.set('key', ":%d:%d" % (cycle, cvus*len(self._workers)))
 
         stats_tree.write(stats_path)
+        trace("* Writing updated stats XML to %s\n" % stats_path)

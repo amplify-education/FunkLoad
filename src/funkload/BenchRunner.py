@@ -39,6 +39,7 @@ from xmlrpclib import ServerProxy, Fault
 from FunkLoadHTTPServer import FunkLoadHTTPServer
 from utils import mmn_encode, set_recording_flag, recording, thread_sleep, \
                   trace, red_str, green_str, get_version
+from stats import StatsCollector
 
 
 USAGE = """%prog [options] file class.method
@@ -266,36 +267,37 @@ class BenchRunner:
         trace(' done.\n')
         self.getMonitorsConfig()
         trace('\n')
-        for cvus in self.cycles:
-            t_start = time.time()
-            reset_cycle_results()
-            text = "Cycle #%i with %s virtual users\n" % (cycle, cvus)
-            trace(text)
-            trace('-' * (len(text) - 1) + "\n\n")
-            monitor_key = '%s:%s:%s' % (self.method_name, cycle, cvus)
-            trace("* setUpCycle hook: ...")
-            self.test.setUpCycle()
-            trace(' done.\n')
-            self.startMonitors(monitor_key)
-            self.startThreads(cycle, cvus)
-            self.logging()
-            #self.dumpThreads()
-            self.stopThreads()
-            self.stopMonitors(monitor_key)
-            cycle += 1
-            trace("* tearDownCycle hook: ...")
-            self.test.tearDownCycle()
-            trace(' done.\n')
-            t_stop = time.time()
-            trace("* End of cycle, %.2fs elapsed.\n" % (t_stop - t_start))
-            success, failures, errors = get_cycle_results()
-            status, code = get_status(success, failures, errors, self.color)
-            trace("* Cycle result: **%s**, "
-                  "%i success, %i failure, %i errors.\n\n" % (
-                status, success, failures, errors))
-            total_success += success
-            total_failures += failures
-            total_errors += errors
+        config = self._config_tag()
+        config['stats_only'] =  True
+        with StatsCollector(self.monitor_hosts, config=config) as collector:
+            for cvus in self.cycles:
+                t_start = time.time()
+                reset_cycle_results()
+                text = "Cycle #%i with %s virtual users\n" % (cycle, cvus)
+                trace(text)
+                trace('-' * (len(text) - 1) + "\n\n")
+                trace("* setUpCycle hook: ...")
+                self.test.setUpCycle()
+                trace(' done.\n')
+                collector.set_monitor_key('%s:%s:%s' % (self.method_name, cycle, cvus))
+                self.startThreads(cycle, cvus)
+                self.logging()
+                #self.dumpThreads()
+                self.stopThreads()
+                cycle += 1
+                trace("* tearDownCycle hook: ...")
+                self.test.tearDownCycle()
+                trace(' done.\n')
+                t_stop = time.time()
+                trace("* End of cycle, %.2fs elapsed.\n" % (t_stop - t_start))
+                success, failures, errors = get_cycle_results()
+                status, code = get_status(success, failures, errors, self.color)
+                trace("* Cycle result: **%s**, "
+                      "%i success, %i failure, %i errors.\n\n" % (
+                    status, success, failures, errors))
+                total_success += success
+                total_failures += failures
+                total_errors += errors
         trace("* tearDownBench hook: ...")
         self.test.tearDownBench()
         trace(' done.\n\n')
@@ -479,45 +481,11 @@ class BenchRunner:
                 monitor_hosts.append((host, port, desc))
         self.monitor_hosts = monitor_hosts
 
-    def startMonitors(self, monitor_key):
-        """Start monitoring on hosts list."""
-        if not self.monitor_hosts:
-            return
-        monitor_hosts = []
-        for (host, port, desc) in self.monitor_hosts:
-            trace("* Start monitoring %s: ..." % host)
-            server = ServerProxy("http://%s:%s" % (host, port))
-            try:
-                server.startRecord(monitor_key)
-            except SocketError:
-                trace(' failed, server is down.\n')
-            else:
-                trace(' done.\n')
-                monitor_hosts.append((host, port, desc))
-        self.monitor_hosts = monitor_hosts
-
-    def stopMonitors(self, monitor_key):
-        """Stop monitoring and save xml result."""
-        if not self.monitor_hosts:
-            return
-        for (host, port, desc) in self.monitor_hosts:
-            trace('* Stop monitoring %s: ' % host)
-            server = ServerProxy("http://%s:%s" % (host, port))
-            try:
-                server.stopRecord(monitor_key)
-                xml = server.getXmlResult(monitor_key)
-            except SocketError:
-                trace(' failed, server is down.\n')
-            else:
-                trace(' done.\n')
-                self.logr(xml)
-
     def logr(self, message):
         """Log to the test result file."""
         self.test._logr(message, force=True)
 
-    def logr_open(self):
-        """Start logging tag."""
+    def _config_tag(self):
         config = {'id': self.test_id,
                   'description': self.test_description,
                   'class_title': self.class_title,
@@ -542,7 +510,13 @@ class BenchRunner:
 
         for (host, port, desc) in self.monitor_hosts:
             config[host] = desc
-        self.test._open_result_log(**config)
+
+        return config
+
+
+    def logr_open(self):
+        """Start logging tag."""
+        self.test._open_result_log(**self._config_tag())
 
     def logr_close(self):
         """Stop logging tag."""
@@ -705,7 +679,6 @@ def main():
         try:
             distmgr.prepare_workers(allow_errors=True)
             ret = distmgr.run()
-            distmgr.final_collect()
         except KeyboardInterrupt:
             trace("* ^C received *")
             distmgr.abort()

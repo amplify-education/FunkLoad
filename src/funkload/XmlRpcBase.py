@@ -66,7 +66,7 @@ Start %prog XML/RPC daemon.
 """
     server_name = None
     # list RPC Methods
-    method_names = ['stopServer', 'getStatus']
+    method_names = ['getStatus', 'stopServer']
 
     def __init__(self, argv=None):
         if self.server_name is None:
@@ -85,6 +85,8 @@ Start %prog XML/RPC daemon.
         self.conf_path = conf_path
         self.host = conf.get('server', 'host')
         self.port = conf.getint('server', 'port')
+        self.interface = conf.get('server', 'interface')
+
         try:
             self.pid_path = conf.get('server', 'pid_path')
         except NoOptionError:

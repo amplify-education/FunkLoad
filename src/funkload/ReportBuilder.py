@@ -257,7 +257,6 @@ def main():
         if len(args) != 2:
             parser.error("incorrect number of arguments")
         trace("Creating diff report ... ")
-        output_dir = options.output_dir
         html_path = RenderDiff(args[0], args[1], options)
         trace("done: \n")
         trace("%s\n" % html_path)
@@ -265,7 +264,6 @@ def main():
         if len(args) < 2:
             parser.error("incorrect number of arguments")
         trace("Creating trend report ... ")
-        output_dir = options.output_dir
         html_path = RenderTrend(args, options)
         trace("done: \n")
         trace("%s\n" % html_path)

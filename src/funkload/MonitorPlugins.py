@@ -16,6 +16,7 @@
 # 02111-1307, USA.
 #
 import pkg_resources, re, pickle
+import sys
 ENTRYPOINT = 'funkload.plugins.monitor'
 
 gd_colors=[['red', 0xff0000],
