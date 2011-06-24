@@ -36,7 +36,7 @@ class MonitorCUs(MonitorPlugin):
 class MonitorMemFree(MonitorPlugin):
     plot1 = {'MEM': ['lines lw 2', 'Memory'],
              'SWAP': ['lines lw 2', 'Swap']}
-    plots = [Plot(plot1, title="Memory usage", unit="kB")]
+    plots = [Plot(plot1, title="Memory usage delta", unit="bytes")]
 
     def getStat(self):
         return {'memTotal': psutil.TOTAL_PHYMEM,
@@ -68,7 +68,7 @@ class MonitorMemFree(MonitorPlugin):
         return {'MEM': mem_used, 'SWAP': swap_used}
 
 class MonitorCPU(MonitorPlugin):
-    plot1 = {'CPU': ['impulse lw 2', 'CPU 1=100%%'],
+    plot1 = {'CPU': ['impulse lw 2', 'CPU 1=100%'],
             'LOAD1': ['lines lw 2','Load 1min'],
             'LOAD5': ['lines lw 2', 'Load 5min'],
             'LOAD15': ['lines lw 2', 'Load 15min']}
