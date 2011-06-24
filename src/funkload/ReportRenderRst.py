@@ -468,7 +468,7 @@ class RenderRst:
                 newpage = True
             self.append(LI + ' Req: %s, %s, url ``%s``' % (a_step.number,
                                                            a_step.type,
-                                                           a_step.url))
+                                                           a_step.url or '/'))
             self.append('')
             self.renderCyclesStepStat(step_name)
 
@@ -522,7 +522,7 @@ class RenderRst:
         for item in items[:number]:
             self.append(LI + ' In page %s, Apdex rating: %s, avg response time: %3.2fs, %s: ``%s``\n'
                         '  `%s`' % (
-                item[1], get_apdex_label(item[5]), item[0], item[2], item[3], item[4]))
+                item[1], get_apdex_label(item[5]), item[0], item[2], item[3] or '/', item[4]))
 
     def renderErrors(self):
         """Render error list."""
