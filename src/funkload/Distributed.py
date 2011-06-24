@@ -381,7 +381,8 @@ class DistributionMgr(threading.Thread):
             remote_tarball = os.path.join(self.remote_res_dir, tarball)
 
             # setup funkload
-            cmd = "./bin/easy_install setuptools ez_setup {funkload}"
+            cmd = "./bin/easy_install setuptools ez_setup {funkload}".format(
+                funkload=self.funkload_location)
 
             if self.distributed_packages:
                 cmd += " %s" % self.distributed_packages
