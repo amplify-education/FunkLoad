@@ -29,9 +29,12 @@ from socket import error as SocketError
 from xmlrpclib import ServerProxy
 import pkg_resources
 import tarfile
-import shutil
 import tempfile
+from mako.lookup import TemplateLookup
 
+TEMPLATE_LOOKUP = TemplateLookup(
+    directories=[pkg_resources.resource_filename('funkload', '/data/templates')],
+    module_directory='/tmp/mako_modules')
 
 def thread_sleep(seconds=0):
     """Sleep seconds."""
@@ -351,3 +354,9 @@ def extract_token(text, tag_start, tag_end):
     if start < 0 or end < 0:
         return None
     return text[start:end]
+
+
+def render_template(template_name, **kwargs):
+    mytemplate = TEMPLATE_LOOKUP.get_template(template_name)
+    return mytemplate.render(**kwargs)
+

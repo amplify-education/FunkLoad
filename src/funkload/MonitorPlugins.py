@@ -17,6 +17,8 @@
 #
 import pkg_resources, re, pickle
 import sys
+from utils import render_template
+
 ENTRYPOINT = 'funkload.plugins.monitor'
 
 gd_colors=[['red', 0xff0000],
@@ -107,46 +109,34 @@ class MonitorPlugin(object):
 
         data = [times]
         labels = ["TIME"]
-        plotlines = []
-        plotsno = 0
+        plot_descriptors = []
         for plot in self.plots:
             if len(plot.plots)==0:
                 continue
-            ylabel = plot.ylabel
-            if plot.unit!="":
-                ylabel+='[%s]' % plot.unit
-            plotlines.append('set title "%s"' % plot.title)
-            plotlines.append('set ylabel "%s"' % ylabel)
-            plot_line = 'plot "%s"' % data_path
 
             li=[]
             for p, line, title in plot.ordered_plots:
                 data.append(parsed[p])
                 labels.append(p)
-                li.append(' u 1:%d title "%s" with %s' % (len(data), title, line))
-            plotlines.append(plot_line+', ""'.join(li))
-            plotsno+=1
+                li.append((len(data), title, line))
+            plot_descriptors.append((plot.title, plot.ylabel, plot.unit, li))
         
-        lines=[]
-        lines.append('set output "%s"' % image_path)
-        lines.append('set terminal png size %d,%d' % (chart_size[0], chart_size[1]*plotsno))
-        lines.append('set grid back')
-        lines.append('set xdata time')
-        lines.append('set timefmt "%H:%M:%S"')
-        lines.append('set format x "%H:%M"')
-        lines.append('set multiplot layout %d, 1' % plotsno)
-        lines.extend(plotlines)
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template('gnuplot/monitor.mako',
+                image_path=image_path,
+                width=chart_size[0],
+                height=chart_size[1],
+                number_of_plots=len(plot_descriptors),
+                plots=plot_descriptors,
+                data_path=data_path,
+            ))
 
         data = zip(*data)
-        f = open(data_path, 'w')
-        f.write("%s\n" % " ".join(labels))
-        for line in data:
-            f.write(' '.join([str(item) for item in line]) + '\n')
-        f.close()
-
-        f = open(gplot_path, 'w')
-        f.write('\n'.join(lines) + '\n')
-        f.close()
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template('gnuplot/data.mako',
+                labels=labels,
+                data=([str(item) for item in line] for line in data),
+            ))
 
         return [(self.name, image_path)]
 
