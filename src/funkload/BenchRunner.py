@@ -32,9 +32,7 @@ import traceback
 import unittest
 from datetime import datetime
 from optparse import OptionParser, TitledHelpFormatter
-from socket import error as SocketError
 from thread import error as ThreadError
-from xmlrpclib import ServerProxy, Fault
 
 from FunkLoadHTTPServer import FunkLoadHTTPServer
 from utils import mmn_encode, set_recording_flag, recording, thread_sleep, \
@@ -265,7 +263,6 @@ class BenchRunner:
         trace("* setUpBench hook: ...")
         self.test.setUpBench()
         trace(' done.\n')
-        self.getMonitorsConfig()
         trace('\n')
         config = self._config_tag()
         config['stats_only'] =  True
@@ -454,32 +451,6 @@ class BenchRunner:
             trace('%i threads : %s\n' % (len(thread_ids), str(thread_ids)))
             trace('-' * 72 + '\n')
             trace(stack + '\n')
-
-    def getMonitorsConfig(self):
-        """ Get monitors configuration from hosts """
-        if not self.monitor_hosts:
-            return
-        monitor_hosts = []
-        for (host, port, desc) in self.monitor_hosts:
-            trace("* Getting monitoring config from %s: ..." % host)
-            server = ServerProxy("http://%s:%s" % (host, port))
-            try:
-                config = server.getMonitorsConfig()
-                data = []
-                for key in config.keys():
-                    xml = '<monitorconfig host="%s" key="%s" value="%s" />' % (
-                                                        host, key, config[key])
-                    data.append(xml)
-                self.logr("\n".join(data))
-            except Fault:
-                trace(' not supported.\n')
-                monitor_hosts.append((host, port, desc))
-            except SocketError:
-                trace(' failed, server is down.\n')
-            else:
-                trace(' done.\n')
-                monitor_hosts.append((host, port, desc))
-        self.monitor_hosts = monitor_hosts
 
     def logr(self, message):
         """Log to the test result file."""

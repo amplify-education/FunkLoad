@@ -2,8 +2,10 @@ import os.path
 import threading
 from Queue import Queue, Empty
 from xmlrpclib import ServerProxy
-from utils import get_version
+from utils import get_version, trace
 import time
+from xmlrpclib import Fault
+from socket import error as SocketError
 
 
 stats_queue = Queue()
@@ -64,6 +66,24 @@ class StatsCollectionThread(threading.Thread):
         self.server = ServerProxy("http://%s:%s" % (host, port))
         self.shutdown_event = threading.Event()
         self.monitor_key = monitor_key
+        self.host = host
+        self.port = port
+
+        try:
+            trace("* Getting monitoring config from %s: ..." % self.host)
+            config = self.server.getMonitorsConfig()
+
+            for key in config.keys():
+                xml = '<monitorconfig host="%s" key="%s" value="%s" />' % (
+                                                    self.host, key, config[key])
+                stats_queue.put(xml)
+        except Fault:
+            trace(' not supported.\n')
+        except SocketError:
+            trace(' failed, server is down.\n')
+            raise
+        else:
+            trace(' done.\n')
 
     def set_monitor_key(self, key):
         self.monitor_key = key
@@ -95,8 +115,11 @@ class StatsCollector(object):
     def __init__(self, monitor_hosts, output_dir=".", config={}, interval=0.5, monitor_key=None):
         self.monitor_threads = []
         for (host, port, desc) in monitor_hosts:
-            self.monitor_threads.append(
-                StatsCollectionThread(host, port, interval, monitor_key))
+            try:
+                self.monitor_threads.append(
+                    StatsCollectionThread(host, port, interval, monitor_key))
+            except SocketError:
+                pass
 
         output_file_path = os.path.join(output_dir, "stats.xml")
         self.stats_writer_thread = StatsWriterThread(output_file_path, config)
