@@ -140,43 +140,6 @@ class MonitorPlugin(object):
 
         return [(self.name, image_path)]
 
-    def gdchart(self, x, times, host, image_prefix, stats):
-        parsed=self.parseStats(stats)
-        if parsed==None:
-            return None
-
-        ret = []
-        i=0
-        for plot in self.plots:
-            image_path="%s_%d.png" % (image_prefix, i)
-            i+=1
-            title="%s:"%host
-            data=[]
-            title_parts=[]
-            j=0
-            for p, _, title in plot.ordered_plots():
-                data.append(parsed[p])
-                title_parts.append(" %s (%s)"%(title, gd_colors[j][0]))
-                j+=1
-            title+=", ".join(title_parts)
-
-            colors=[]
-            for c in gd_colors:
-                colors.append(c[1])
-
-            x.title = title
-            x.ytitle = plot.ylabel
-            x.ylabel_fmt = '%%.2f %s' % plot.unit
-            x.set_color = tuple(colors)
-            x.title = title
-            x.xtitle = 'time and CUs'
-            x.setLabels(times)
-            x.setData(*data)
-            x.draw(image_path)
-            ret.append((plot.title, image_path))
-
-        return ret
-
     def getConfig(self):
         return pickle.dumps(self.plots).replace("\n", "\\n")
 

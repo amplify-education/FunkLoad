@@ -266,31 +266,6 @@ class truncate(BaseFilter):
         return other
 
 
-def is_valid_html(html=None, file_path=None, accept_warning=False):
-    """Ask tidy if the html is valid.
-
-    Return a tuple (status, errors)
-    """
-    if not file_path:
-        fd, file_path = mkstemp(prefix='fl-tidy', suffix='.html')
-        os.write(fd, html)
-        os.close(fd)
-    tidy_cmd = 'tidy -errors %s' % file_path
-    ret, output = getstatusoutput(tidy_cmd)
-    status = False
-    if ret == 0:
-        status = True
-    elif ret == 256:
-        # got warnings
-        if accept_warning:
-            status = True
-    elif ret > 512:
-        if 'command not found' in output:
-            raise RuntimeError('tidy command not found, please install tidy.')
-        raise RuntimeError('Executing [%s] return: %s ouput: %s' %
-                           (tidy_cmd, ret, output))
-    return status, output
-
 class Data:
     '''Simple "sentinel" class that lets us identify user data
     and content type in POST'''
