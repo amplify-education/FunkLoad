@@ -31,9 +31,7 @@ class MonitorNagios(MonitorPlugin):
 
         for cmd in self.commands.keys():
             data=self._parsePerf(cmd, self.commands[cmd])
-            p={}
-            for d in data:
-                p[d[1]]=['lines lw 2', d[0]]
+            p=[(d[1], 'lines lw 2', d[0]) for d in data]
             if len(p)!=0:
                 self.plots.append(Plot(p, unit=data[0][3], title=cmd))
 

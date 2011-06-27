@@ -65,6 +65,19 @@ class Plot:
         for key in kwargs:
             setattr(self, key, kwargs[key])
 
+    @property
+    def ordered_plots(self):
+        """
+        Return the plots as (key, line_type, title) tuples
+
+        Handle both dicts (the old style), and lists of tuples (the new style)
+        """
+        if isinstance(self.plots, dict):
+            return [(k, l, t) for (k, (l, t)) in self.plots.items()]
+        else:
+            return self.plots
+            
+
 class MonitorPlugin(object):
     def __init__(self, conf=None):
         if not hasattr(self, 'name') or self.name == None:
@@ -107,10 +120,10 @@ class MonitorPlugin(object):
             plot_line = 'plot "%s"' % data_path
 
             li=[]
-            for p in plot.plots.keys():
+            for p, line, title in plot.ordered_plots:
                 data.append(parsed[p])
                 labels.append(p)
-                li.append(' u 1:%d title "%s" with %s' % (len(data), plot.plots[p][1], plot.plots[p][0]))
+                li.append(' u 1:%d title "%s" with %s' % (len(data), title, line))
             plotlines.append(plot_line+', ""'.join(li))
             plotsno+=1
         
@@ -151,9 +164,9 @@ class MonitorPlugin(object):
             data=[]
             title_parts=[]
             j=0
-            for p in plot.plots.keys():
+            for p, _, title in plot.ordered_plots():
                 data.append(parsed[p])
-                title_parts.append(" %s (%s)"%(plot.plots[p][1], gd_colors[j][0]))
+                title_parts.append(" %s (%s)"%(title, gd_colors[j][0]))
                 j+=1
             title+=", ".join(title_parts)
 

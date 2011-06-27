@@ -20,7 +20,7 @@ import psutil
 from  MonitorPlugins import MonitorPlugin, Plot
 
 class MonitorCUs(MonitorPlugin):
-    plot1 = {'CUs': ['impulse', 'CUs']}
+    plot1 = [('CUs', 'impulse', 'CUs')]
     plots = [Plot(plot1, title="Concurent users", ylabel="CUs")]
 
     def getStat(self):
@@ -34,8 +34,8 @@ class MonitorCUs(MonitorPlugin):
         return {'CUs': cus}
 
 class MonitorMemFree(MonitorPlugin):
-    plot1 = {'MEM': ['lines lw 2', 'Memory'],
-             'SWAP': ['lines lw 2', 'Swap']}
+    plot1 = [('MEM', 'lines lw 2', 'Memory'),
+             ('SWAP', 'lines lw 2', 'Swap')]
     plots = [Plot(plot1, title="Memory usage delta", unit="bytes")]
 
     def getStat(self):
@@ -68,10 +68,10 @@ class MonitorMemFree(MonitorPlugin):
         return {'MEM': mem_used, 'SWAP': swap_used}
 
 class MonitorCPU(MonitorPlugin):
-    plot1 = {'CPU': ['impulse lw 2', 'CPU 1=100%'],
-            'LOAD1': ['lines lw 2','Load 1min'],
-            'LOAD5': ['lines lw 2', 'Load 5min'],
-            'LOAD15': ['lines lw 2', 'Load 15min']}
+    plot1 = [('CPU', 'impulse lw 2', 'CPU 1=100%'),
+             ('LOAD1', 'lines lw 2','Load 1min'),
+             ('LOAD5', 'lines lw 2', 'Load 5min'),
+             ('LOAD15', 'lines lw 2', 'Load 15min')]
     plots = [Plot(plot1, title="Load average", ylabel="loadavg")]
 
     def getStat(self):
@@ -134,8 +134,8 @@ class MonitorCPU(MonitorPlugin):
 
 class MonitorNetwork(MonitorPlugin):
     interface='eth0'
-    plot1={'NETIN': ['lines lw 2', 'In'],
-           'NETOUT': ['lines lw 2','Out']}
+    plot1=[('NETIN', 'lines lw 2', 'In'),
+           ('NETOUT', 'lines lw 2','Out')]
     plots=[Plot(plot1, title="Network traffic", ylabel="", unit = "kB")]
 
     def __init__(self, conf):

@@ -11,11 +11,11 @@ DATALABEL22='EXAMPLE22'
 DATATITLE22='example22'
 
 class Example(MonitorPlugin):
-    plots=[Plot({DATALABEL1: [GNUPLOTSTYLE, DATATITLE1]}, title=PLOTTITLE1),
-           Plot({
-                  DATALABEL21: [GNUPLOTSTYLE, DATATITLE21],
-                  DATALABEL22: [GNUPLOTSTYLE, DATATITLE22]
-                }, title=PLOTTITLE2)]
+    plots=[Plot([(DATALABEL1, GNUPLOTSTYLE, DATATITLE1)], title=PLOTTITLE1),
+           Plot([
+                  (DATALABEL21, GNUPLOTSTYLE, DATATITLE21),
+                  (DATALABEL22, GNUPLOTSTYLE, DATATITLE22)
+                ], title=PLOTTITLE2)]
     def getStat(self):
         return {DATALABEL1: 70, DATALABEL21: 80, DATALABEL22: 90}
 

@@ -33,11 +33,11 @@ class MonitorMunin(MonitorPlugin):
 
         for cmd in self.commands.keys():
             data=self._getConfig(cmd, self.commands[cmd][0], self.commands[cmd][1])
-            p={}
+            p=[]
             negatives=[]
             counters=[]
             for d in data[1]:
-                p[d[0]]=['lines lw 2', d[1]]
+                p.append((d[0], 'lines lw 2', d[1]))
                 if d[2]:
                     negatives.append(d[2])
                 if d[3]:
