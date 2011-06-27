@@ -25,11 +25,11 @@ import os
 import sys
 import re
 from commands import getstatusoutput
-from ReportRenderRst import rst_title
 from ReportRenderHtmlBase import RenderHtmlBase
 from datetime import datetime
 from MonitorPlugins import MonitorPlugins
 from MonitorPluginsDefault import MonitorCPU, MonitorMemFree, MonitorNetwork, MonitorCUs
+from utils import render_template
 
 def gnuplot(script_path):
     """Execute a gnuplot script."""
@@ -79,11 +79,15 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
 
     def getXRange(self):
         """Return the max CVUs range."""
+        return "[0:" + str(self.getMaxCVUs() + 1) + "]"
+
+    def getMaxCVUs(self):
+        """Return the max CVU."""
         maxCycle = self.config['cycles'].split(',')[-1]
         maxCycle = str(maxCycle[:-1].strip())
         if maxCycle.startswith("["):
             maxCycle = maxCycle[1:]
-        return "[0:" + str(int(maxCycle) + 1) + "]"
+        return int(maxCycle)
 
     def useXTicLabels(self):
         """Guess if we need to use labels for x axis or number."""
@@ -411,77 +415,50 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
                                        'request_%s.data' % step)
         stats = self.stats
         # data
-        lines = ["CUs STEP ERROR MIN AVG MAX P10 P50 P90 P95 APDEX"]
+        labels = ['CUs', 'STEP', 'ERROR', 'MIN', 'AVG', 'MAX', 'P10', 'P50', 'P90', 'P95', 'APDEX']
         cvus = []
+        data = []
         has_error = False
         for cycle in self.cycles:
             if not stats[cycle]['response_step'].has_key(step):
                 continue
-            values = []
             resp = stats[cycle]['response_step'].get(step)
-            values.append(str(resp.cvus))
             cvus.append(str(resp.cvus))
-            values.append(str(step))
             error = resp.error_percent
             if error:
                 has_error = True
-            values.append(str(error))
-            values.append(str(resp.min))
-            values.append(str(resp.avg))
-            values.append(str(resp.max))
-            values.append(str(resp.percentiles.perc10))
-            values.append(str(resp.percentiles.perc50))
-            values.append(str(resp.percentiles.perc90))
-            values.append(str(resp.percentiles.perc95))
-            values.append(str(resp.apdex_score))
-            lines.append(' '.join(values))
-        if len(lines) == 1:
+            data.append((
+                str(resp.cvus),
+                str(step),
+                str(error),
+                str(resp.min),
+                str(resp.avg),
+                str(resp.max),
+                str(resp.percentiles.perc10),
+                str(resp.percentiles.perc50),
+                str(resp.percentiles.perc90),
+                str(resp.percentiles.perc95),
+                str(resp.apdex_score),
+            ))
+        if len(data) == 0:
             # No result during a cycle
             return
-        f = open(data_path, 'w')
-        f.write('\n'.join(lines) + '\n')
-        f.close()
-        # script
-        lines = []
-        lines.append('set output "%s"' % image_path)
-        lines.append('set terminal png size ' + self.getChartSizeTmp(cvus))
-        lines.append('set grid')
-        lines.append('set bars 5.0')
-        lines.append('set title "Request %s Response time"' % step)
-        lines.append('set xlabel "Concurrent Users"')
-        lines.append('set ylabel "Duration (s)"')
-        lines.append('set grid back')
-        lines.append('set style fill solid .25')
-        lines.append('set xrange ' + self.getXRange())
-        if not has_error:
-            lines.append('plot "%s" u 1:8:8:10:9 t "med/p90/p95" w candlesticks lt 1 lw 1 whiskerbars 0.5, "" u 1:7:4:8:8 w candlesticks lt 2 lw 1 t "min/p10/med" whiskerbars 0.5, "" u 1:5 t "avg" w lines lt 3 lw 2' % data_path)
-        else:
-            lines.append('set format x ""')
-            lines.append('set multiplot')
-            lines.append('unset title')
-            lines.append('unset xlabel')
-            lines.append('set size 1, 0.7')
-            lines.append('set origin 0, 0.3')
-            lines.append('set lmargin 5')
-            lines.append('set bmargin 0')
-            lines.append('plot "%s" u 1:8:8:10:9 t "med/p90/p95" w candlesticks lt 1 lw 1 whiskerbars 0.5, "" u 1:7:4:8:8 w candlesticks lt 2 lw 1 t "min/p10/med" whiskerbars 0.5, "" u 1:5 t "avg" w lines lt 3 lw 2' % data_path)
-            lines.append('set format x "% g"')
-            lines.append('set bmargin 3')
-            lines.append('set autoscale y')
-            lines.append('set style fill solid .25')
-            lines.append('set size 1.0, 0.3')
-            lines.append('set xlabel "Concurrent Users"')
-            lines.append('set ylabel "% errors"')
-            lines.append('set origin 0.0, 0.0')
-            #lines.append('set yrange [0:100]')
-            #lines.append('set ytics 20')
-            lines.append('plot "%s" u 1:3 w linespoints lt 1 lw 2 t "%% Errors"' % data_path)
-            lines.append('unset multiplot')
-            lines.append('set size 1.0, 1.0')
-        f = open(gplot_path, 'w')
-        lines = self.fixXLabels('\n'.join(lines) + '\n')
-        f.write(lines)
-        f.close()
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template('gnuplot/data.mako',
+                labels=labels,
+                data=data
+            ))
+
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template('gnuplot/response.mako',
+                image_path=image_path,
+                chart_size=self.getChartSize(cvus),
+                step=step,
+                maxCVUs=self.getMaxCVUs(),
+                use_xticlabels=self.useXTicLabels(),
+                data_path=data_path,
+                has_error=has_error
+            ))
         gnuplot(gplot_path)
         return
 
