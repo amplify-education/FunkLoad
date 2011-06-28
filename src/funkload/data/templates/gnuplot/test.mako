@@ -1,10 +1,4 @@
-<%def name="labels(use_x_labels, cols)">\
-% if use_x_labels:
-${cols}:xticlabels(1)\
-% else:
-1:${cols}\
-% endif
-</%def>
+<%namespace file="gnuplot.mako" name="g"/>
 
 set output "${image_path}"
 set title "Successful Tests Per Second"
@@ -28,20 +22,20 @@ set lmargin 5
 set bmargin 0
 % endif
 
-plot "${data_path}" u ${labels(use_xticlabels, '2')} w linespoints lw 2 lt 2 t "STPS"
+plot "${data_path}" u <%g:columns>2</%g:columns> w linespoints lw 2 lt 2 t "STPS"
 
 % if has_error:
-set format x "%% g"
+set format x "% g"
 set bmargin 3
 set autoscale y
 set style fill solid .25
 set size 1.0, 0.3
 set ytics 20
 set xlabel "Concurrent Users"
-set ylabel "%% errors"
+set ylabel "% errors"
 set origin 0.0, 0.0
 set yrange [0:100]
-plot "${data_path}" u ${labels(use_xticlabels, '2')} w linespoints lt 1 lw 2 t "%%%% Errors"
+plot "${data_path}" u <%g:columns>3</%g:columns> w linespoints lt 1 lw 2 t "% Errors"
 unset multiplot
 % endif
 
