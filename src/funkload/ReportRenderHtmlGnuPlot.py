@@ -185,18 +185,6 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         gnuplot(gplot_path)
         return
 
-    def appendDelays(self, delay, delay_low, delay_high, stats):
-        """ Show percentiles or min, avg and max in chart. """
-        if self.options.with_percentiles:
-            delay.append(stats.percentiles.perc50)
-            delay_low.append(stats.percentiles.perc10)
-            delay_high.append(stats.percentiles.perc90)
-        else:
-            delay.append(stats.avg)
-            delay_low.append(stats.min)
-            delay_high.append(stats.max)
-
-
     def createPageChart(self):
         """Create the page chart."""
         image_path = gnuplot_scriptpath(self.report_dir, 'pages_spps.png')
