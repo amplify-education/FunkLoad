@@ -123,65 +123,42 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         data_path  = gnuplot_scriptpath(self.report_dir, 'tests.data')
         stats = self.stats
         # data
-        lines = ["CUs STPS ERROR"]
+        labels = ["CUs", "STPS", "ERROR"]
         cvus = []
+        data = []
         has_error = False
         for cycle in self.cycles:
             if not stats[cycle].has_key('test'):
                 continue
-            values = []
             test = stats[cycle]['test']
-            values.append(str(test.cvus))
             cvus.append(str(test.cvus))
-            values.append(str(test.tps))
             error = test.error_percent
             if error:
                 has_error = True
-            values.append(str(error))
-            lines.append(' '.join(values))
-        if len(lines) == 1:
+            data.append((
+                test.cvus,
+                test.tps,
+                error,
+            ))
+        if len(data) == 0:
             # No tests finished during the cycle
             return
-        f = open(data_path, 'w')
-        f.write('\n'.join(lines) + '\n')
-        f.close()
-        # script
-        lines = ['set output "' + image_path +'"']
-        lines.append('set title "Successful Tests Per Second"')
-        lines.append('set terminal png size ' + self.getChartSizeTmp(cvus))
-        lines.append('set xlabel "Concurrent Users"')
-        lines.append('set ylabel "Test/s"')
-        lines.append('set grid back')
-        lines.append('set xrange ' + self.getXRange())
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template('gnuplot/data.mako',
+                labels=labels,
+                data=data
+            ))
 
-        if not has_error:
-            lines.append('plot "%s" u 1:2 w linespoints lw 2 lt 2 t "STPS"' % data_path)
-        else:
-            lines.append('set format x ""')
-            lines.append('set multiplot')
-            lines.append('unset title')
-            lines.append('unset xlabel')
-            lines.append('set size 1, 0.7')
-            lines.append('set origin 0, 0.3')
-            lines.append('set lmargin 5')
-            lines.append('set bmargin 0')
-            lines.append('plot "%s" u 1:2 w linespoints lw 2 lt 2 t "STPS"' % data_path)
-            lines.append('set format x "% g"')
-            lines.append('set bmargin 3')
-            lines.append('set autoscale y')
-            lines.append('set style fill solid .25')
-            lines.append('set size 1.0, 0.3')
-            lines.append('set ytics 20')
-            lines.append('set xlabel "Concurrent Users"')
-            lines.append('set ylabel "% errors"')
-            lines.append('set origin 0.0, 0.0')
-            lines.append('set yrange [0:100]')
-            lines.append('plot "%s" u 1:3 w linespoints lt 1 lw 2 t "%% Errors"' % data_path)
-            lines.append('unset multiplot')
-        f = open(gplot_path, 'w')
-        lines = self.fixXLabels('\n'.join(lines) + '\n')
-        f.write(lines)
-        f.close()
+        # script
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template('gnuplot/test.mako',
+                image_path=image_path,
+                chart_size=self.getChartSize(cvus),
+                maxCVUs=self.getMaxCVUs(),
+                use_xticlabels=self.useXTicLabels(),
+                data_path=data_path,
+                has_error=has_error
+            ))
         gnuplot(gplot_path)
         return
 
@@ -416,17 +393,17 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
             if error:
                 has_error = True
             data.append((
-                str(resp.cvus),
-                str(step),
-                str(error),
-                str(resp.min),
-                str(resp.avg),
-                str(resp.max),
-                str(resp.percentiles.perc10),
-                str(resp.percentiles.perc50),
-                str(resp.percentiles.perc90),
-                str(resp.percentiles.perc95),
-                str(resp.apdex_score),
+                resp.cvus,
+                step,
+                error,
+                resp.min,
+                resp.avg,
+                resp.max,
+                resp.percentiles.perc10,
+                resp.percentiles.perc50,
+                resp.percentiles.perc90,
+                resp.percentiles.perc95,
+                resp.apdex_score,
             ))
         if len(data) == 0:
             # No result during a cycle
@@ -473,17 +450,17 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
             if error:
                 has_error = True
             data.append((
-                str(resp.cvus),
-                str(index),
-                str(error),
-                str(resp.min),
-                str(resp.avg),
-                str(resp.max),
-                str(resp.percentiles.perc10),
-                str(resp.percentiles.perc50),
-                str(resp.percentiles.perc90),
-                str(resp.percentiles.perc95),
-                str(resp.apdex_score),
+                resp.cvus,
+                index,
+                error,
+                resp.min,
+                resp.avg,
+                resp.max,
+                resp.percentiles.perc10,
+                resp.percentiles.perc50,
+                resp.percentiles.perc90,
+                resp.percentiles.perc95,
+                resp.apdex_score,
             ))
         if len(data) == 0:
             # No result during a cycle

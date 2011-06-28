@@ -1,4 +1,4 @@
 ${' '.join(labels)}
 % for line in data:
-${' '.join(line)}
+${' '.join(str(datum) for datum in line)}
 % endfor
