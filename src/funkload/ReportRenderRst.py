@@ -203,6 +203,14 @@ class ResponseRst(BaseRst):
         ret = self.sep.join(ret)
         return ret
 
+class ResponseDescRst(ResponseRst):
+    def __init__(self, stats, url, index):
+        ResponseRst.__init__(self, stats)
+        self.image_names = ["request_{url}_{index}".format(
+            url=url.replace('/', '_'),
+            index=index
+        )]
+
 
 class TestRst(BaseRst):
     """Test Rendering."""
@@ -450,6 +458,22 @@ class RenderRst:
         if renderer is not None:
             self.append(renderer.render_footer())
 
+    def renderCyclesDescStat(self, key, index):
+        stats = self.stats
+        first = True
+        renderer = None
+        for cycle in self.cycles:
+            stat = stats[cycle]['response_desc'].get(key)
+            if stat is None:
+                continue
+            renderer = ResponseDescRst(stat, key[0], index)
+            if first:
+                self.append(renderer.render_header(self.with_chart))
+                first = False
+            self.append(renderer.render_stat())
+        if renderer is not None:
+            self.append(renderer.render_footer())
+
     def renderPageDetail(self, cycle_r):
         """Render a page detail."""
         self.append(rst_title("Page detail stats", 2))
@@ -472,6 +496,19 @@ class RenderRst:
             self.append('')
             self.renderCyclesStepStat(step_name)
 
+    def renderPageByDescription(self):
+        """Render stats for all pages, separated by url and description"""
+        self.append(rst_title("Page stats by description", 2))
+        self.pages = set()
+        for cycle, stats in self.stats.items():
+            self.pages.update(stats.get('response_desc', {}).keys())
+
+        self.pages = sorted(self.pages)
+
+        for index, page in enumerate(self.pages):
+            url, desc = page
+            self.append(rst_title("PAGE %s: %s" % (url, desc), 3))
+            self.renderCyclesDescStat(page, index)
 
     def createMonitorCharts(self):
         pass
@@ -654,6 +691,7 @@ class RenderRst:
         self.renderSlowestRequests(self.slowest_items)
         self.renderMonitors()
         self.renderPageDetail(cycle_r)
+        self.renderPageByDescription()
         self.renderErrors()
         self.renderDefinitions()
         self.renderHook()

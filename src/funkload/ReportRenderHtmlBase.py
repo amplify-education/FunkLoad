@@ -147,6 +147,8 @@ class RenderHtmlBase(RenderRst):
         self.createAllResponseChart()
         for step_name in self.steps:
             self.createResponseChart(step_name)
+        for index, key in enumerate(self.pages):
+            self.createResponseDescriptionChart(key, index)
 
     # monitoring charts
     def createMonitorCharts(self):

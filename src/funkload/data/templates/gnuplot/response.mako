@@ -10,7 +10,7 @@ set output "${image_path}"
 set terminal png size ${chart_size[0]},${chart_size[1]}
 set grid
 set bars 5.0
-set title "Request ${step} Response time"
+set title "${title}"
 set xlabel "Concurrent Users"
 set ylabel "Duration (s)"
 set grid back

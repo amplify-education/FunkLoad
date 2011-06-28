@@ -453,14 +453,70 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
             gplot_file.write(render_template('gnuplot/response.mako',
                 image_path=image_path,
                 chart_size=self.getChartSize(cvus),
-                step=step,
+                title="Request {step} Response time".format(step=step),
                 maxCVUs=self.getMaxCVUs(),
                 use_xticlabels=self.useXTicLabels(),
                 data_path=data_path,
                 has_error=has_error
             ))
         gnuplot(gplot_path)
-        return
+
+    def createResponseDescriptionChart(self, key, index):
+        """Create responses chart."""
+        key_path = key[0].replace('/', '_')
+        image_path = gnuplot_scriptpath(self.report_dir,
+                                        'request_%s_%s.png' % (key_path, index))
+        gplot_path = str(os.path.join(self.report_dir,
+                                      'request_%s_%s.gplot' % (key_path, index)))
+        data_path = gnuplot_scriptpath(self.report_dir,
+                                       'request_%s_%s.data' % (key_path, index))
+        stats = self.stats
+        # data
+        labels = ['CUs', 'INDEX', 'ERROR', 'MIN', 'AVG', 'MAX', 'P10', 'P50', 'P90', 'P95', 'APDEX']
+        cvus = []
+        data = []
+        has_error = False
+        for cycle in self.cycles:
+            if not stats[cycle]['response_desc'].has_key(key):
+                continue
+            resp = stats[cycle]['response_desc'][key]
+            cvus.append(str(resp.cvus))
+            error = resp.error_percent
+            if error:
+                has_error = True
+            data.append((
+                str(resp.cvus),
+                str(index),
+                str(error),
+                str(resp.min),
+                str(resp.avg),
+                str(resp.max),
+                str(resp.percentiles.perc10),
+                str(resp.percentiles.perc50),
+                str(resp.percentiles.perc90),
+                str(resp.percentiles.perc95),
+                str(resp.apdex_score),
+            ))
+        if len(data) == 0:
+            # No result during a cycle
+            return
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template('gnuplot/data.mako',
+                labels=labels,
+                data=data
+            ))
+
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template('gnuplot/response.mako',
+                image_path=image_path,
+                chart_size=self.getChartSize(cvus),
+                title="Request Response time",
+                maxCVUs=self.getMaxCVUs(),
+                use_xticlabels=self.useXTicLabels(),
+                data_path=data_path,
+                has_error=has_error
+            ))
+        gnuplot(gplot_path)
 
     def getMonitorConfig(self, host):
         """Return the host config or a default for backward compat"""

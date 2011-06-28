@@ -143,37 +143,41 @@ class FunkLoadXmlParser:
         attrs = element['attrs']
         if name == 'testResult':
             cycle = attrs['cycle']
-            stats = self.stats.setdefault(cycle, {'response_step': {}})
+            stats = self.stats.setdefault(cycle, {})
             stat = stats.setdefault(
                 'test', TestStat(cycle, self.cycle_duration,
                                  attrs['cvus']))
             stat.add(attrs['result'], attrs['pages'], attrs.get('xmlrpc', 0),
                      attrs['redirects'], attrs['images'], attrs['links'],
                      attrs['connection_duration'], attrs.get('traceback'))
-            stats['test'] = stat
         elif name == 'response':
             cycle = attrs['cycle']
-            stats = self.stats.setdefault(cycle, {'response_step':{}})
+            stats = self.stats.setdefault(cycle, {})
             stat = stats.setdefault(
                 'response', AllResponseStat(cycle, self.cycle_duration,
                                             attrs['cvus'], self.apdex_t))
             stat.add(attrs['time'], attrs['result'], attrs['duration'])
-            stats['response'] = stat
 
             stat = stats.setdefault(
                 'page', PageStat(cycle, self.cycle_duration, attrs['cvus'], 
                                  self.apdex_t))
             stat.add(attrs['thread'], attrs['step'], attrs['time'],
                      attrs['result'], attrs['duration'], attrs['type'])
-            stats['page'] = stat
 
             step = '%s.%s' % (attrs['step'], attrs['number'])
-            stat = stats['response_step'].setdefault(
+            stat = stats.setdefault('response_step', {}).setdefault(
                 step, ResponseStat(attrs['step'], attrs['number'],
                                    attrs['cvus'], self.apdex_t))
             stat.add(attrs['type'], attrs['result'], attrs['url'],
                      attrs['duration'], attrs.get('description'))
-            stats['response_step'][step] = stat
+
+            page = (attrs['url'], attrs.get('description'))
+            stat = stats.setdefault('response_desc', {}).setdefault(
+                page, ResponseStat(attrs['step'], attrs['number'],
+                                   attrs['cvus'], self.apdex_t))
+            stat.add(attrs['type'], attrs['result'], attrs['url'],
+                     attrs['duration'], attrs.get('description'))
+
             if attrs['result'] != 'Successful':
                 result = str(attrs['result'])
                 stats = self.error.setdefault(result, [])
