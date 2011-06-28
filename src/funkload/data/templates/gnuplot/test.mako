@@ -8,7 +8,7 @@ ${cols}:xticlabels(1)\
 
 set output "${image_path}"
 set title "Successful Tests Per Second"
-set terminal png size ${chart_size[0]}, ${chart_size[1]}
+set terminal png size ${chart_size[0]},${chart_size[1]}
 set xlabel "Concurrent Users"
 set ylabel "Test/s"
 set grid back

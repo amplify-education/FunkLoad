@@ -153,14 +153,13 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         with open(gplot_path, 'w') as gplot_file:
             gplot_file.write(render_template('gnuplot/test.mako',
                 image_path=image_path,
-                chart_size=self.getChartSize(cvus),
+                chart_size=self.chart_size,
                 maxCVUs=self.getMaxCVUs(),
                 use_xticlabels=self.useXTicLabels(),
                 data_path=data_path,
                 has_error=has_error
             ))
         gnuplot(gplot_path)
-        return
 
     def createPageChart(self):
         """Create the page chart."""
@@ -170,32 +169,36 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         data_path = gnuplot_scriptpath(self.report_dir, 'pages.data')
         stats = self.stats
         # data
-        lines = ["CUs SPPS ERROR MIN AVG MAX P10 P50 P90 P95 APDEX E G F P U"]
+        labels = ["CUs", "SPPS", "ERROR", "MIN", "AVG", "MAX", "P10",
+                "P50", "P90", "P95", "APDEX", "E", "G", "F", "P", "U"]
+        data = []
         cvus = []
         has_error = False
         apdex_t = 0
         for cycle in self.cycles:
             if not stats[cycle].has_key('page'):
                 continue
-            values = []
             page = stats[cycle]['page']
-            values.append(str(page.cvus))
             cvus.append(str(page.cvus))
-            values.append(str(page.rps))
             error = page.error_percent
             if error:
                 has_error = True
-            values.append(str(error))
-            values.append(str(page.min))
-            values.append(str(page.avg))
-            values.append(str(page.max))
-            values.append(str(page.percentiles.perc10))
-            values.append(str(page.percentiles.perc50))
-            values.append(str(page.percentiles.perc90))
-            values.append(str(page.percentiles.perc95))
-            score = page.apdex_score
             apdex_t = page.apdex.apdex_t
-            values.append(str(score))
+            score = page.apdex_score
+
+            values = [
+                page.cvus,
+                page.rps,
+                error,
+                page.min,
+                page.avg,
+                page.max,
+                page.percentiles.perc10,
+                page.percentiles.perc50,
+                page.percentiles.perc90,
+                page.percentiles.perc95,
+                score,
+            ]
             apdex = ['0', '0', '0', '0', '0']
             if score < 0.5:
                 apdex[4] = str(score)
@@ -207,80 +210,28 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
                 apdex[1] = str(score)
             else:
                 apdex[0] = str(score)
-            values = values + apdex
-            lines.append(' '.join(values))
-        if len(lines) == 1:
+            data.append(values + apdex)
+        if len(data) == 0:
             # No pages finished during a cycle
             return
-        f = open(data_path, 'w')
-        f.write('\n'.join(lines) + '\n')
-        f.close()
-        # script
-        lines = ['set output "' + image_path +'"']
-        lines.append('set title "Successful Pages Per Second"')
-        lines.append('set ylabel "Pages Per Second"')
-        lines.append('set grid back')
-        lines.append('set xrange ' + self.getXRange())
-        lines.append('set terminal png size ' + self.getChartSizeTmp(cvus))
-        lines.append('set format x ""')
-        lines.append('set multiplot')
-        lines.append('unset title')
-        lines.append('unset xlabel')
-        lines.append('set bmargin 0')
-        lines.append('set lmargin 8')
-        lines.append('set rmargin 9.5')
-        lines.append('set key inside top')
-        if has_error:
-            lines.append('set size 1, 0.4')
-            lines.append('set origin 0, 0.6')
-        else:
-            lines.append('set size 1, 0.6')
-            lines.append('set origin 0, 0.4')
-        lines.append('plot "%s" u 1:2 w linespoints lw 2 lt 2 t "SPPS"' % data_path)
-        # apdex
-        lines.append('set boxwidth 0.8')
-        lines.append('set style fill solid .7')
-        lines.append('set ylabel "Apdex %.1f" ' % apdex_t)
-        lines.append('set yrange [0:1]')
-        lines.append('set key outside top')
-        if has_error:
-            lines.append('set origin 0.0, 0.3')
-            lines.append('set size 1.0, 0.3')
-        else:
-            lines.append('set size 1.0, 0.4')
-            lines.append('set bmargin 3')
-            lines.append('set format x "% g"')
-            lines.append('set xlabel "Concurrent Users"')
-            lines.append('set origin 0.0, 0.0')
 
-        lines.append('plot "%s" u 1:12 w boxes lw 2 lt rgb "#99CDFF" t "E", "" u 1:13 w boxes lw 2 lt rgb "#00FF01" t "G", "" u 1:14 w boxes lw 2 lt rgb "#FFFF00" t "F", "" u 1:15 w boxes lw 2 lt rgb "#FF7C81" t "P", "" u 1:16 w boxes lw 2 lt rgb "#C0C0C0" t "U"' % data_path)
-        lines.append('unset boxwidth')
-        lines.append('set key inside top')
-        if has_error:
-            lines.append('set bmargin 3')
-            lines.append('set format x "% g"')
-            lines.append('set xlabel "Concurrent Users"')
-            lines.append('set origin 0.0, 0.0')
-            lines.append('set size 1.0, 0.3')
-            lines.append('set ylabel "% errors"')
-            lines.append('set yrange [0:100]')
-            lines.append('plot "%s" u 1:3 w boxes lt 1 lw 2 t "%% Errors"' % data_path)
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template('gnuplot/data.mako',
+                labels=labels,
+                data=data
+            ))
 
-        lines.append('unset yrange')
-        lines.append('set autoscale y')
-        lines.append('unset multiplot')
-        lines.append('set size 1.0, 1.0')
-        lines.append('unset rmargin')
-        lines.append('set output "%s"' % image2_path)
-        lines.append('set title "Pages Response time"')
-        lines.append('set ylabel "Duration (s)"')
-        lines.append('set bars 5.0')
-        lines.append('set style fill solid .25')
-        lines.append('plot "%s" u 1:8:8:10:9 t "med/p90/p95" w candlesticks lt 1 lw 1 whiskerbars 0.5, "" u 1:7:4:8:8 w candlesticks lt 2 lw 1 t "min/p10/med" whiskerbars 0.5, "" u 1:5 t "avg" w lines lt 3 lw 2' % data_path)
-        f = open(gplot_path, 'w')
-        lines = self.fixXLabels('\n'.join(lines) + '\n')
-        f.write(lines)
-        f.close()
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template('gnuplot/page.mako',
+                image_path=image_path,
+                image2_path=image2_path,
+                chart_size=self.chart_size,
+                maxCVUs=self.getMaxCVUs(),
+                use_xticlabels=self.useXTicLabels(),
+                data_path=data_path,
+                has_error=has_error,
+                apdex_t="%0.1f" % apdex_t
+            ))
         gnuplot(gplot_path)
 
     def createAllResponseChart(self):
@@ -417,7 +368,7 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         with open(gplot_path, 'w') as gplot_file:
             gplot_file.write(render_template('gnuplot/response.mako',
                 image_path=image_path,
-                chart_size=self.getChartSize(cvus),
+                chart_size=self.chart_size,
                 title="Request {step} Response time".format(step=step),
                 maxCVUs=self.getMaxCVUs(),
                 use_xticlabels=self.useXTicLabels(),
@@ -474,7 +425,7 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         with open(gplot_path, 'w') as gplot_file:
             gplot_file.write(render_template('gnuplot/response.mako',
                 image_path=image_path,
-                chart_size=self.getChartSize(cvus),
+                chart_size=self.chart_size,
                 title="Request Response time",
                 maxCVUs=self.getMaxCVUs(),
                 use_xticlabels=self.useXTicLabels(),
