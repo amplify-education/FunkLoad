@@ -70,7 +70,7 @@ setup(
                         'psutil',
                         'mako >= 0.4.1'],
     zip_safe=True,
-    package_data={'funkload': ['data/templates/gnuplot/*', 'data/*',
+    package_data={'funkload': ['data/templates/gnuplot/*', 'data/*.tpl', 'data/*.css',
                                'demo/simple/*', 'demo/zope/*',
                                'demo/cmf/*', 'demo/xmlrpc/*', 'demo/cps/*',
                                'demo/seam-booking-1.1.5/*', 'demo/*.txt',
