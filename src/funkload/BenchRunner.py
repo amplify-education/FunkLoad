@@ -187,17 +187,17 @@ class LoopTestRunner(threading.Thread):
                 if len(test_result.errors):
                     if recording():
                         add_cycle_result('error')
-                    if self.color:
-                        trace(red_str('E'))
-                    else:
-                        trace('E')
+                        if self.color:
+                            trace(red_str('E'))
+                        else:
+                            trace('E')
                 else:
                     if recording():
                         add_cycle_result('failure')
-                    if self.color:
-                        trace(red_str('F'))
-                    else:
-                        trace('F')
+                        if self.color:
+                            trace(red_str('F'))
+                        else:
+                            trace('F')
                 if self.debug:
                     for (test, error) in test_result.errors:
                         trace("ERROR %s: %s" % (str(test), str(error)))
