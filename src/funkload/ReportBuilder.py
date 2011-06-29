@@ -143,7 +143,7 @@ class FunkLoadXmlParser:
         attrs = element['attrs']
         if name == 'testResult':
             cycle = attrs['cycle']
-            stats = self.stats.setdefault(cycle, {})
+            stats = self.stats.setdefault(cycle, {'response_step': {}, 'response_desc': {}})
             stat = stats.setdefault(
                 'test', TestStat(cycle, self.cycle_duration,
                                  attrs['cvus']))
@@ -152,7 +152,7 @@ class FunkLoadXmlParser:
                      attrs['connection_duration'], attrs.get('traceback'))
         elif name == 'response':
             cycle = attrs['cycle']
-            stats = self.stats.setdefault(cycle, {})
+            stats = self.stats.setdefault(cycle, {'response_step': {}, 'response_desc': {}})
             stat = stats.setdefault(
                 'response', AllResponseStat(cycle, self.cycle_duration,
                                             attrs['cvus'], self.apdex_t))
