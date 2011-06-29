@@ -83,7 +83,7 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
 
     def getMaxCVUs(self):
         """Return the max CVU."""
-        maxCycle = self.config['cycles'].split(',')[-1]
+        maxCycle = self.config['cycles'].split(', ')[-1]
         maxCycle = str(maxCycle[:-1].strip())
         if maxCycle.startswith("["):
             maxCycle = maxCycle[1:]
@@ -91,7 +91,7 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
 
     def useXTicLabels(self):
         """Guess if we need to use labels for x axis or number."""
-        cycles = self.config['cycles'][1:-1].split(',')
+        cycles = self.config['cycles'][1:-1].split(', ')
         if len(cycles) <= 1:
             # single cycle
             return True

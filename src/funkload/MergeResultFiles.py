@@ -109,7 +109,7 @@ class MergeResultFiles:
 
         # compute cumulated cycles
         node_cycles = [int(cycle.strip())
-                       for cycle in xml_parser.cycles[1:-1].split(',')
+                       for cycle in xml_parser.cycles[1:-1].split(', ')
                        if cycle]
         cycles = map(lambda x: x * node_count, node_cycles)
 
