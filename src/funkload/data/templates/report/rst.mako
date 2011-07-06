@@ -1,0 +1,189 @@
+<%def name="render_title(text, level=1)">
+<%
+    rst_level = ['=', '=', '-', '~']
+    char = rst_level[level]
+    length = len(text)
+%>
+% if level == 0:
+${char*length}
+% endif
+${text}
+${char*length}
+</%def>
+
+<%def name="render_stats_table(column_names, stats)">
+
+<%! import itertools %>
+<% 
+stats = [[cycles[cycle]] + row.stats_list() for (cycle, row) in sorted(stats.items())]
+column_width = max(len(str(v)) for v in itertools.chain(column_names, *stats))
+%>
+
+<%def name="divider()">
+% for _ in column_names:
+${'='*column_width} \
+% endfor
+</%def>
+
+${divider()}
+% for column in column_names:
+${column.center(column_width)} \
+% endfor
+${divider()}
+% for row in stats:
+% for value in row:
+${str(value).center(column_width)} \
+% endfor
+
+% endfor
+${divider()}
+</%def>
+
+<%def name="render_aggregate_stats(name, aggregated_stats, substats)">
+${render_title(name, 2)}
+% if name in image_paths:
+.. image:: ${image_paths[name]}
+% endif
+
+${render_stats_table(stats_columns, aggregated_stats)}
+
+% if len(substats) > 1:
+% for substat, cycles_stats in substats.items():
+${render_stats_display(name, substat, cycles_stats)}
+% endfor
+% endif
+</%def>
+
+<%def name="render_stats_display(aggregate_name, stat_name, stats)">
+${render_title(stat_name, 3)}
+
+% if (aggregate_name, stat_name) in image_paths:
+.. image:: ${image_paths[(aggregate_name, stat_name)]}
+% endif
+
+${render_stats_table(stats_columns, stats)}
+</%def>
+
+<%block name="header_display">
+${render_title("Funkload_ bench report", 0)}
+:date: ${date}
+:abstract:
+        ${config['class_description']}
+        Bench result of ``${config['class']}.${config['method']}``
+        ${config['description']}
+
+.. _FunkLoad: http://funkload.nuxeo.org/
+.. sectnum:: :depth: 2
+.. contents:: Table of contents
+.. |APDEXT| replace:: \ :sub:`${apdex_t}`
+</%block>
+
+<%block name="config_display">
+${render_title("Bench configuration", 2)}
+* Launched: ${date}
+% if config.get('node'):
+* From: ${config['node']}
+% endif
+* Test: ``${config['module']}.py ${config['class']}.${config['method']}``
+% if config.get('label'):
+* Label: ${config['label']}
+% endif
+* Target server: ${config['server_url']}
+* Cycles of concurrent users: ${config['cycles']}
+* Cycle duration: ${config['duration']}s
+* Sleeptime between request: from ${config['sleep_time_min']}s to ${config['sleep_time_max']}s
+* Sleeptime between test case: ${config['sleep_time']}s
+* Startup delay between thread: ${config['startup_delay']}s
+* Apdex: |APDEXT|
+* FunkLoad_ version: ${config['version']}
+
+<% metadata = dict((key[5:], value) for (key, value) in config.items() if key.startswith("meta:")) %>
+% if metadata:
+Bench metadata:
+% for key, value in metadata.items():
+* ${key}: ${value}
+% endfor
+% endif
+</%block>
+
+<%block name="bench_content">
+</%block>
+
+% for aggregate, stats in sorted(allstats.items()):
+${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
+% endfor
+
+% if monitor_charts:
+    ${render_title("Monitored hosts", 2)}
+    <%block name="monitors">
+    % for host, charts in monitor_charts.items():
+    ${render_title(host + ": " + config.get(host, ''), 3)}
+    % for chart_title, chart_image in charts:
+    **${chart_title}**
+
+    .. image:: ${chart_image}
+
+    % endfor
+    % endfor
+    </%block>
+% endif
+
+<%block name="definitions">
+Definitions
+-----------
+* CUs: Concurrent users or number of concurrent threads executing tests.
+* Request: a single GET/POST/redirect/xmlrpc request.
+* Page: a request with redirects and resource links (image, css, js) for an html page.
+* STPS: Successful tests per second.
+* SPPS: Successful pages per second.
+* RPS: Requests per second, successful or not.
+* maxSPPS: Maximum SPPS during the cycle.
+* maxRPS: Maximum RPS during the cycle.
+* MIN: Minimum response time for a page or request.
+* AVG: Average response time for a page or request.
+* MAX: Maximmum response time for a page or request.
+* P10: 10th percentile, response time where 10 percent of pages or requests are delivered.
+* MED: Median or 50th percentile, response time where half of pages or requests are delivered.
+* P90: 90th percentile, response time where 90 percent of pages or requests are delivered.
+* P95: 95th percentile, response time where 95 percent of pages or requests are delivered.
+* Apdex T: Application Performance Index, 
+  this is a numerical measure of user satisfaction, it is based
+  on three zones of application responsiveness:
+
+  - Satisfied: The user is fully productive. This represents the
+    time value (T seconds) below which users are not impeded by
+    application response time.
+
+  - Tolerating: The user notices performance lagging within
+    responses greater than T, but continues the process.
+
+  - Frustrated: Performance with a response time greater than 4*T
+    seconds is unacceptable, and users may abandon the process.
+
+    By default T is set to 1.5s this means that response time between 0
+    and 1.5s the user is fully productive, between 1.5 and 6s the
+    responsivness is tolerating and above 6s the user is frustrated.
+
+    The Apdex score converts many measurements into one number on a
+    uniform scale of 0-to-1 (0 = no users satisfied, 1 = all users
+    satisfied).
+
+    Visit http://www.apdex.org/ for more information.
+
+* Rating: To ease interpretation the Apdex
+  score is also represented as a rating:
+
+  - U for UNACCEPTABLE represented in gray for a score between 0 and 0.5 
+
+  - P for POOR represented in red for a score between 0.5 and 0.7
+
+  - F for FAIR represented in yellow for a score between 0.7 and 0.85
+
+  - G for Good represented in green for a score between 0.85 and 0.94
+
+  - E for Excellent represented in blue for a score between 0.94 and 1.''')
+
+Report generated with FunkLoad_ ${config['version']}
+, more information available on the
+`FunkLoad site <http://funkload.nuxeo.org/#benching>`
+</%block>

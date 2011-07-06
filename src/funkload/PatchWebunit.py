@@ -34,7 +34,6 @@ $Id: PatchWebunit.py 24649 2005-08-29 14:20:19Z bdelbosc $
 """
 import os
 import sys
-import time
 import urlparse
 from urllib import urlencode
 import httplib
@@ -115,17 +114,21 @@ class FKLIMGSucker(IMGSucker):
                 # newattributes.append((name, path))
                 if not self.session.images.has_key(url):
                     self.ftestcase.logdd('    img: %s ...' % url)
-                    t_start = time.time()
-                    self.session.images[url] = self.session.fetch(url)
-                    t_stop = time.time()
-                    self.ftestcase.logdd('     Done in %.3fs' %
-                                         (t_stop - t_start))
-                    self.session.history.append(('image', url))
-                    self.ftestcase.total_time += (t_stop - t_start)
-                    self.ftestcase.total_images += 1
-                    self.ftestcase._log_response(self.session.images[url],
-                                                 'image', None, t_start,
-                                                 t_stop)
+                    with self.ftestcase.record({'image': url}, rtype='image') as metadata:
+                        try:
+                            self.session.images[url] = self.session.fetch(url)
+                            self.session.history.append(('image', url))
+                            metadata['response'] = self.session.images[url]
+                        except HTTPError as error:
+                            if self.ftestcase._accept_invalid_links:
+                                if not self.ftestcase.in_bench_mode:
+                                    self.ftestcase.logd('  ' + str(error))
+                            else:
+                                metadata['body'] = error.response.body
+                                metadata['headers'] = "\n".join(": ".join(header) for header in error.response.headers.items())
+                                metadata['result'] = 'Failure'
+                                raise self.ftestcase.failureException, str(error)
+
                     thread_sleep()      # give a chance to other threads
             else:
                 newattributes.append((name, value))
@@ -146,16 +149,21 @@ class FKLIMGSucker(IMGSucker):
                 # newattributes.append((name, path))
                 if not self.session.css.has_key(url):
                     self.ftestcase.logdd('    link: %s ...' % url)
-                    t_start = time.time()
-                    self.session.css[url] = self.session.fetch(url)
-                    t_stop = time.time()
-                    self.ftestcase.logdd('     Done in %.3fs' %
-                                         (t_stop - t_start))
-                    self.session.history.append(('link', url))
-                    self.ftestcase.total_time += (t_stop - t_start)
-                    self.ftestcase.total_links += 1
-                    self.ftestcase._log_response(self.session.css[url],
-                                                 'link', None, t_start, t_stop)
+                    with self.ftestcase.record({'link': url}, rtype='link') as metadata:
+                        try:
+                            self.session.css[url] = self.session.fetch(url)
+                            self.session.history.append(('link', url))
+                            metadata['response'] = self.session.css[url]
+                        except HTTPError as error:
+                            if self.ftestcase._accept_invalid_links:
+                                if not self.ftestcase.in_bench_mode:
+                                    self.ftestcase.logd('  ' + str(error))
+                            else:
+                                metadata['body'] = error.response.body
+                                metadata['headers'] = "\n".join(": ".join(header) for header in error.response.headers.items())
+                                metadata['result'] = 'Failure'
+                                raise self.ftestcase.failureException, str(error)
+
                     thread_sleep()      # give a chance to other threads
             else:
                 newattributes.append((name, value))

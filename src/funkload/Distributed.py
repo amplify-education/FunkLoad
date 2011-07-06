@@ -492,44 +492,6 @@ class DistributionMgr(threading.Thread):
                 trace("* Received bench log from [%s] into %s\n" % (
                     worker.host, local_file))
 
-    def write_statistics(self, successful_results):
-        """ Write the distributed stats to a file in the output dir """
-        path = os.path.join(self.distribution_output, "stats.xml")
-        config = {'id': self.test_id,
-                  'description': self.test_description,
-                  'class_title': self.class_title,
-                  'class_description': self.class_description,
-                  'module': self.module_name,
-                  'class': self.class_name,
-                  'method': self.method_name,
-                  'cycles': self.cycles,
-                  'duration': self.duration,
-                  'sleep_time': self.sleep_time,
-                  'startup_delay': self.startup_delay,
-                  'sleep_time_min': self.sleep_time_min,
-                  'sleep_time_max': self.sleep_time_max,
-                  'cycle_time': self.cycle_time,
-                  'configuration_file': self.config_path,
-                  'server_url': self.test_url,
-                  'log_xml': self.result_path,
-                  'python_version': platform.python_version()}
-
-        for (host, port, desc) in self.monitor_hosts:
-            config[host] = desc
-
-        with open(path, "w+") as fd:
-            fd.write('<funkload version="{version}" time="{time}">\n'.format(
-                            version=get_version(), time=time.time()))
-            for key, value in config.items():
-                # Write out the config values
-                fd.write('<config key="{key}" value="{value}"/>\n'.format(
-                                                        key=key, value=value))
-            for xml in successful_results:
-                fd.write(xml)
-                fd.write("\n")
-
-            fd.write("</funkload>\n")
-
     def _calculate_time_skew(self, results, stats):
         def min_time(vals):
             keyfunc = lambda elem: float(elem.attrib['time'])
@@ -572,7 +534,7 @@ class DistributionMgr(threading.Thread):
         stats_path = os.path.join(self.distribution_output, "stats.xml")
         stats_tree = ElementTree(file=stats_path)
 
-        results = results_tree.findall("testResult")
+        results = results_tree.findall("record")
         stats = stats_tree.findall("monitor")
         ratio = self._calculate_time_skew(results, stats)
 

@@ -58,11 +58,12 @@ except ImportError:
     pass
 import os
 import xml.parsers.expat
+from collections import defaultdict
 from optparse import OptionParser, TitledHelpFormatter
 from tempfile import NamedTemporaryFile
 
-from ReportStats import AllResponseStat, PageStat, ResponseStat, TestStat
-from ReportStats import MonitorStat, ErrorStat
+from ReportStats import StatsAccumulator
+from ReportStats import MonitorStat
 from ReportRenderRst import RenderRst
 from ReportRenderHtml import RenderHtml
 from ReportRenderDiff import RenderDiff
@@ -80,11 +81,10 @@ class FunkLoadXmlParser:
         """Init setup expat handlers."""
         self.apdex_t = apdex_t
         parser = xml.parsers.expat.ParserCreate()
+        parser.buffer_text = True
         parser.CharacterDataHandler = self.handleCharacterData
         parser.StartElementHandler = self.handleStartElement
         parser.EndElementHandler = self.handleEndElement
-        parser.StartCdataSectionHandler = self.handleStartCdataSection
-        parser.EndCdataSectionHandler = self.handleEndCdataSection
         self.parser = parser
         self.current_element = [{'name': 'root'}]
         self.is_recording_cdata = False
@@ -92,11 +92,22 @@ class FunkLoadXmlParser:
 
         self.cycles = None
         self.cycle_duration = 0
-        self.stats = {}                 # cycle stats
-        self.monitor = {}               # monitoring stats
-        self.monitorconfig = {}         # monitoring config
+
+        def nested_default_dict(constructor, depth=1):
+            if depth <= 1:
+                return defaultdict(constructor)
+            else:
+                def const():
+                    return nested_default_dict(constructor, depth - 1)
+                return defaultdict(const)
+
+        def make_accum():
+            return StatsAccumulator(float(self.cycle_duration), apdex_t)
+
+        self.stats = nested_default_dict(make_accum, 3) # cycle stats
+        self.monitor = {}                         # monitoring stats
+        self.monitorconfig = {}                   # monitoring config
         self.config = {}
-        self.error = {}
 
     def parse(self, xml_file):
         """Do the parsing."""
@@ -130,61 +141,29 @@ class FunkLoadXmlParser:
             self.config[attrs['key']] = attrs['value']
             if attrs['key'] == 'duration':
                 self.cycle_duration = attrs['value']
-        elif name == 'header':
-            # save header as extra response attribute
-            headers = self.current_element[-2]['attrs'].setdefault(
-                'headers', {})
-            headers[str(attrs['name'])] = str(attrs['value'])
         self.current_element.append({'name': name, 'attrs': attrs})
+
+    # old element names: header, headers, body, testResult, response, monitor, monitorconfig
 
     def handleEndElement(self, name):
         """Processing element."""
         element = self.current_element.pop()
         attrs = element['attrs']
-        if name == 'testResult':
-            cycle = attrs['cycle']
-            stats = self.stats.setdefault(cycle, {'response_step': {}, 'response_desc': {}})
-            stat = stats.setdefault(
-                'test', TestStat(cycle, self.cycle_duration,
-                                 attrs['cvus']))
-            stat.add(attrs['result'], attrs['pages'], attrs.get('xmlrpc', 0),
-                     attrs['redirects'], attrs['images'], attrs['links'],
-                     attrs['connection_duration'], attrs.get('traceback'))
-        elif name == 'response':
-            cycle = attrs['cycle']
-            stats = self.stats.setdefault(cycle, {'response_step': {}, 'response_desc': {}})
-            stat = stats.setdefault(
-                'response', AllResponseStat(cycle, self.cycle_duration,
-                                            attrs['cvus'], self.apdex_t))
-            stat.add(attrs['time'], attrs['result'], attrs['duration'])
-
-            stat = stats.setdefault(
-                'page', PageStat(cycle, self.cycle_duration, attrs['cvus'], 
-                                 self.apdex_t))
-            stat.add(attrs['thread'], attrs['step'], attrs['time'],
-                     attrs['result'], attrs['duration'], attrs['type'])
-
-            step = '%s.%s' % (attrs['step'], attrs['number'])
-            stat = stats.setdefault('response_step', {}).setdefault(
-                step, ResponseStat(attrs['step'], attrs['number'],
-                                   attrs['cvus'], self.apdex_t))
-            stat.add(attrs['type'], attrs['result'], attrs['url'],
-                     attrs['duration'], attrs.get('description'))
-
-            page = (attrs['url'], attrs.get('description'))
-            stat = stats.setdefault('response_desc', {}).setdefault(
-                page, ResponseStat(attrs['step'], attrs['number'],
-                                   attrs['cvus'], self.apdex_t))
-            stat.add(attrs['type'], attrs['result'], attrs['url'],
-                     attrs['duration'], attrs.get('description'))
-
-            if attrs['result'] != 'Successful':
-                result = str(attrs['result'])
-                stats = self.error.setdefault(result, [])
-                stats.append(ErrorStat(
-                    attrs['cycle'], attrs['step'], attrs['number'],
-                    attrs.get('code'), attrs.get('headers'),
-                    attrs.get('body'), attrs.get('traceback')))
+        if name == 'aggregate':
+            # Add this aggregation key to the list on the parent record
+            self.current_element[-1]['attrs'].setdefault('aggregates', []).append(
+                (element['attrs']['name'], "".join(element['contents'])))
+        elif name == 'result':
+            # set the result as an attribute of the parend record
+            self.current_element[-1]['attrs']['result'] = "".join(element['contents'])
+        elif name == 'record':
+            cycle = int(attrs['cycle'])
+            for key, value in attrs.get('aggregates', []):
+                self.stats[key][value][cycle].add_record(
+                    float(attrs['time']),
+                    float(attrs['duration']),
+                    attrs['result'] == 'Successful'
+                )
         elif name == 'monitor':
             host = attrs.get('host')
             stats = self.monitor.setdefault(host, [])
@@ -194,25 +173,8 @@ class FunkLoadXmlParser:
             config = self.monitorconfig.setdefault(host, {})
             config[attrs.get('key')]=attrs.get('value')
 
-
-    def handleStartCdataSection(self):
-        """Start recording cdata."""
-        self.is_recording_cdata = True
-        self.current_cdata = ''
-
-    def handleEndCdataSection(self):
-        """Save CDATA content into the parent element."""
-        self.is_recording_cdata = False
-        # assume CDATA is encapsulate in a container element
-        name = self.current_element[-1]['name']
-        self.current_element[-2]['attrs'][name] = self.current_cdata
-        self.current_cdata = ''
-
     def handleCharacterData(self, data):
-        """Extract cdata."""
-        if self.is_recording_cdata:
-            self.current_cdata += data
-
+        self.current_element[-1].setdefault('contents', []).append(data)
 
 
 # ------------------------------------------------------------
@@ -288,18 +250,18 @@ def main():
         if options.html:
             trace("Creating html report: ...")
             html_path = RenderHtml(xml_parser.config, xml_parser.stats,
-                                   xml_parser.error, xml_parser.monitor,
+                                   xml_parser.monitor,
                                    xml_parser.monitorconfig, options)()
             trace("done: \n")
             trace(html_path + "\n")
         elif options.org:
             from ReportRenderOrg import RenderOrg
             print unicode(RenderOrg(xml_parser.config, xml_parser.stats,
-                                xml_parser.error, xml_parser.monitor,
+                                xml_parser.monitor,
                                 xml_parser.monitorconfig, options)).encode("utf-8")
         else:
             print unicode(RenderRst(xml_parser.config, xml_parser.stats,
-                                xml_parser.error, xml_parser.monitor,
+                                xml_parser.monitor,
                                 xml_parser.monitorconfig, options)).encode("utf-8")
 
 

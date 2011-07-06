@@ -24,12 +24,14 @@ $Id$
 import os
 import sys
 import re
+import hashlib
 from commands import getstatusoutput
 from ReportRenderHtmlBase import RenderHtmlBase
 from datetime import datetime
 from MonitorPlugins import MonitorPlugins
 from MonitorPluginsDefault import MonitorCPU, MonitorMemFree, MonitorNetwork, MonitorCUs
 from utils import render_template
+from ReportStats import STATS_COLUMNS
 
 def gnuplot(script_path):
     """Execute a gnuplot script."""
@@ -81,17 +83,9 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         """Return the max CVUs range."""
         return "[0:" + str(self.getMaxCVUs() + 1) + "]"
 
-    def getMaxCVUs(self):
-        """Return the max CVU."""
-        maxCycle = self.config['cycles'].split(', ')[-1]
-        maxCycle = str(maxCycle[:-1].strip())
-        if maxCycle.startswith("["):
-            maxCycle = maxCycle[1:]
-        return int(maxCycle)
-
     def useXTicLabels(self):
         """Guess if we need to use labels for x axis or number."""
-        cycles = self.config['cycles'][1:-1].split(', ')
+        cycles = self.cycles
         if len(cycles) <= 1:
             # single cycle
             return True
@@ -443,3 +437,60 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
                 gnuplot(gplot_path)
                 charts.extend(r)
         return charts
+     
+    def createResultChart(self, key, stats):
+        output_name = 'results_{hash}'.format(hash=hashlib.md5(str(key)).hexdigest())
+        image_name = output_name + '.png'
+        image_path = gnuplot_scriptpath(self.report_dir, image_name)
+        gplot_path = str(os.path.join(self.report_dir, output_name + '.gplot'))
+        data_path = gnuplot_scriptpath(self.report_dir, output_name + '.data')
+
+        # data
+        labels = STATS_COLUMNS + ["E", "G", "F", "P", "U"]
+        data = []
+        has_error = False
+        apdex_t = 0
+        for cycle, cycle_stats in stats.items():
+            values = [self.cycles[cycle]] + cycle_stats.stats_list()
+            if cycle_stats.errors > 0:
+                has_error = True
+            score = cycle_stats.apdex_score
+
+            apdex = ['0', '0', '0', '0', '0']
+            if score < 0.5:
+                apdex[4] = str(score)
+            elif score < 0.7:
+                apdex[3] = str(score)
+            elif score < 0.85:
+                apdex[2] = str(score)
+            elif score < 0.94:
+                apdex[1] = str(score)
+            else:
+                apdex[0] = str(score)
+            data.append(values + apdex)
+        if len(data) == 0:
+            # No pages finished during a cycle
+            return
+
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template('gnuplot/data.mako',
+                labels=labels,
+                data=data
+            ))
+        
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template('gnuplot/result.mako',
+                image_path=image_path,
+                chart_size=[640, 800],
+                maxCVUs=max(self.cycles),
+                datapoints=len(self.cycles),
+                use_xticlabels=self.useXTicLabels(),
+                data_path=data_path,
+                has_error=has_error,
+                apdex_t="%0.1f" % apdex_t,
+                column_names=labels,
+                shared={}
+            ))
+        gnuplot(gplot_path)
+
+        return image_name

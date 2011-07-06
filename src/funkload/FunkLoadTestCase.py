@@ -37,6 +37,8 @@ from tempfile import mkdtemp
 from xml.sax.saxutils import quoteattr
 from urlparse import urljoin
 from ConfigParser import ConfigParser, NoSectionError, NoOptionError
+from contextlib import contextmanager
+from xml.etree.ElementTree import Element, SubElement, tostring
 
 from webunit.webunittest import WebTestCase, HTTPError
 
@@ -99,6 +101,8 @@ class FunkLoadTestCase(unittest.TestCase):
             self._loop_records = []
         if sys.version_info >= (2, 5):
             self.__exc_info = sys.exc_info
+        
+        self._aggregates = []
 
 
     def _funkload_init(self):
@@ -169,7 +173,6 @@ class FunkLoadTestCase(unittest.TestCase):
             self._browser.debug_headers = True
         else:
             self._browser.debug_headers = False
-        self.step_success = True
         self.test_status = 'Successful'
         self.steps = 0
         self.page_responses = 0
@@ -195,51 +198,40 @@ class FunkLoadTestCase(unittest.TestCase):
         if params is None and rtype in ('post','put'):
             # enable empty put/post
             params = []
-        t_start = time.time()
-        try:
-            response = self._browser.fetch(url, params, ok_codes=ok_codes,
-                                           key_file=self._keyfile_path,
-                                           cert_file=self._certfile_path, method=rtype)
-        except:
-            etype, value, tback = sys.exc_info()
-            t_stop = time.time()
-            t_delta = t_stop - t_start
-            self.total_time += t_delta
-            self.step_success = False
-            self.test_status = 'Failure'
-            self.logd(' Failed in %.3fs' % t_delta)
-            if etype is HTTPError:
-                self._log_response(value.response, rtype, description,
-                                   t_start, t_stop, log_body=True)
-                if self._dumping:
-                    self._dump_content(value.response)
-                raise self.failureException, str(value.response)
-            else:
-                self._log_response_error(url, rtype, description, t_start,
-                                         t_stop)
-                if etype is SocketError:
-                    raise SocketError("Can't load %s." % url)
-                raise
-        t_stop = time.time()
-        # Log response
-        t_delta = t_stop - t_start
-        self.total_time += t_delta
-        if redirect:
-            self.total_redirects += 1
-        elif rtype != 'link':
-            self.total_pages += 1
-        else:
-            self.total_links += 1
+        
+        step = self.steps
+        number = self.page_responses
+        with self.record({'Request by step': (step, number),
+                          'Request by description': (url, description)},
+                         description=description,
+                         rtype=rtype,
+                         redirect=redirect,
+                         url=url) as metadata:
+            try:
+                response = self._browser.fetch(url, params, ok_codes=ok_codes,
+                                               key_file=self._keyfile_path,
+                                               cert_file=self._certfile_path, method=rtype)
+                metadata['test_status'] = 'Success'
+                metadata['response_code'] = response.code
 
-        if rtype in ('put','post', 'get', 'delete'):
-            # this is a valid referer for the next request
-            self.setHeader('Referer', url)
-        self._browser.history.append((rtype, url))
-        self.logd(' Done in %.3fs' % t_delta)
-        self._log_response(response, rtype, description, t_start, t_stop)
-        if self._dumping:
-            self._dump_content(response)
-        return response
+                if rtype in ('put','post', 'get', 'delete'):
+                    # this is a valid referer for the next request
+                    self.setHeader('Referer', url)
+                self._browser.history.append((rtype, url))
+                if self._dumping:
+                    self._dump_content(response)
+                return response
+
+            except HTTPError as exc:
+                metadata['body'] = exc.response.body
+                metadata['headers'] = "\n".join(": ".join(header) for header in exc.response.headers.items())
+                metadata['result'] = 'Failure'
+                metadata['response_code'] = exc.response.code
+                if self._dumping:
+                    self._dump_content(exc.response)
+                raise self.failureException, str(exc.response)
+            except SocketError:
+                raise SocketError("Can't load %s." % url)
 
     def _browse(self, url_in, params_in=None,
                 description=None, ok_codes=None,
@@ -327,27 +319,8 @@ class FunkLoadTestCase(unittest.TestCase):
         if load_auto_links and response.is_html and not self._simple_fetch:
             self.logd(' Load css and images...')
             page = response.body
-            t_start = time.time()
-            c_start = self.total_time
-            try:
-                # pageImages is patched to call _log_response on all links
-                self._browser.pageImages(url, page, self)
-            except HTTPError, error:
-                if self._accept_invalid_links:
-                    if not self.in_bench_mode:
-                        self.logd('  ' + str(error))
-                else:
-                    t_stop = time.time()
-                    t_delta = t_stop - t_start
-                    self.step_success = False
-                    self.test_status = 'Failure'
-                    self.logd('  Failed in ~ %.2fs' % t_delta)
-                    # XXX The duration logged for this response is wrong
-                    self._log_response(error.response, 'link', None,
-                                       t_start, t_stop, log_body=True)
-                    raise self.failureException, str(error)
-            c_stop = self.total_time
-            self.logd('  Done in %.3fs' % (c_stop - c_start))
+            # pageImages is patched to call self.record on all links
+            self._browser.pageImages(url, page, self)
         if sleep:
             self.sleep()
         self._response = response
@@ -451,40 +424,25 @@ class FunkLoadTestCase(unittest.TestCase):
                                                          self.steps,
                                                          description or ''))
         response = None
-        t_start = time.time()
         if self._authinfo is not None:
             url = url_in.replace('//', '//'+self._authinfo)
         else:
             url = url_in
-        try:
-            server = ServerProxy(url)
-            method = getattr(server, method_name)
-            if params is not None:
-                response = method(*params)
-            else:
-                response = method()
-        except:
-            etype, value, tback = sys.exc_info()
-            t_stop = time.time()
-            t_delta = t_stop - t_start
-            self.total_time += t_delta
-            self.step_success = False
-            self.test_status = 'Error'
-            self.logd(' Failed in %.3fs' % t_delta)
-            self._log_xmlrpc_response(url_in, method_name, description,
-                                      response, t_start, t_stop, -1)
-            if etype is SocketError:
+        
+        method_url = url_in + "#" + method_name
+        with self.record({'xmlrpc': method_url}, url=method_url,
+                description=description):
+            try:
+                server = ServerProxy(url)
+                method = getattr(server, method_name)
+                if params is not None:
+                    response = method(*params)
+                else:
+                    response = method()
+                self.sleep()
+                return response
+            except SocketError:
                 raise SocketError("Can't access %s." % url)
-            raise
-        t_stop = time.time()
-        t_delta = t_stop - t_start
-        self.total_time += t_delta
-        self.total_xmlrpc += 1
-        self.logd(' Done in %.3fs' % t_delta)
-        self._log_xmlrpc_response(url_in, method_name, description, response,
-                                  t_start, t_stop, 200)
-        self.sleep()
-        return response
 
     def xmlrpc_call(self, url_in, method_name, params=None, description=None):
         """BBB of xmlrpc, this method will be removed for 1.6.0."""
@@ -766,52 +724,60 @@ class FunkLoadTestCase(unittest.TestCase):
         """Close the result log."""
         self._logr('</funkload>', force=True)
 
+    @contextmanager
+    def record(self, aggregates, **kwargs):
+        info = {}
+        info['cycle'] = str(self.cycle)
+        info['cvus'] = str(self.cvus)
+        info['thread_id'] = str(self.thread_id)
+        info['suite_name'] = str(self.suite_name)
+        info['test_name'] = str(self.test_name)
+        start_time = time.time()
+        try:
+            kwargs['result'] = 'Successful'
+            yield kwargs
+
+        except KeyboardInterrupt:
+            raise
+        except:
+            kwargs['result'] = 'Error'
+            kwargs['traceback'] = quoteattr(' '.join(
+                traceback.format_exception(*sys.exc_info())))
+            raise
+        finally:
+            info['time'] = str(start_time)
+            info['duration'] = str(time.time() - start_time)
+
+            message = Element('record', info)
+            for key, value in kwargs.items():
+                sub = SubElement(message, key)
+                sub.text = str(value)
+            for key, value in aggregates.items():
+                sub = SubElement(message, 'aggregate', name=key)
+                sub.text = str(value)
+            self._logr(tostring(message))
+
+
+
     def _log_response_error(self, url, rtype, description, time_start,
                             time_stop):
         """Log a response that raise an unexpected exception."""
-        self.total_responses += 1
-        self.page_responses += 1
-        info = {}
-        info['cycle'] = self.cycle
-        info['cvus'] = self.cvus
-        info['thread_id'] = self.thread_id
-        info['suite_name'] = self.suite_name
-        info['test_name'] = self.test_name
         info['step'] = self.steps
         info['number'] = self.page_responses
         info['type'] = rtype
         info['url'] = quoteattr(url)
         info['code'] = -1
         info['description'] = description and quoteattr(description) or '""'
-        info['time_start'] = time_start
-        info['duration'] = time_stop - time_start
-        info['result'] = 'Error'
-        info['traceback'] = quoteattr(' '.join(
-            traceback.format_exception(*sys.exc_info())))
-        message = '''<response cycle="%(cycle).3i" cvus="%(cvus).3i" thread="%(thread_id).3i" suite="%(suite_name)s" name="%(test_name)s" step="%(step).3i" number="%(number).3i" type="%(type)s" result="%(result)s" url=%(url)s code="%(code)s" description=%(description)s time="%(time_start)s" duration="%(duration)s" traceback=%(traceback)s />''' % info
-        self._logr(message)
 
     def _log_response(self, response, rtype, description, time_start,
                       time_stop, log_body=False):
         """Log a response."""
-        self.total_responses += 1
-        self.page_responses += 1
-        info = {}
-        info['cycle'] = self.cycle
-        info['cvus'] = self.cvus
-        info['thread_id'] = self.thread_id
-        info['suite_name'] = self.suite_name
-        info['test_name'] = self.test_name
         info['step'] = self.steps
         info['number'] = self.page_responses
         info['type'] = rtype
         info['url'] = quoteattr(response.url)
         info['code'] = response.code
         info['description'] = description and quoteattr(description) or '""'
-        info['time_start'] = time_start
-        info['duration'] = time_stop - time_start
-        info['result'] = self.step_success and 'Successful' or 'Failure'
-        response_start = '''<response cycle="%(cycle).3i" cvus="%(cvus).3i" thread="%(thread_id).3i" suite="%(suite_name)s" name="%(test_name)s" step="%(step).3i" number="%(number).3i" type="%(type)s" result="%(result)s" url=%(url)s code="%(code)s" description=%(description)s time="%(time_start)s" duration="%(duration)s"''' % info
 
         if not log_body:
             message = response_start + ' />'
@@ -833,37 +799,17 @@ class FunkLoadTestCase(unittest.TestCase):
     def _log_xmlrpc_response(self, url, method, description, response,
                              time_start, time_stop, code):
         """Log a response."""
-        self.total_responses += 1
-        self.page_responses += 1
-        info = {}
-        info['cycle'] = self.cycle
-        info['cvus'] = self.cvus
-        info['thread_id'] = self.thread_id
-        info['suite_name'] = self.suite_name
-        info['test_name'] = self.test_name
         info['step'] = self.steps
         info['number'] = self.page_responses
         info['type'] = 'xmlrpc'
         info['url'] = quoteattr(url + '#' + method)
         info['code'] = code
         info['description'] = description and quoteattr(description) or '""'
-        info['time_start'] = time_start
-        info['duration'] = time_stop - time_start
-        info['result'] = self.step_success and 'Successful' or 'Failure'
-        message = '''<response cycle="%(cycle).3i" cvus="%(cvus).3i" thread="%(thread_id).3i" suite="%(suite_name)s" name="%(test_name)s" step="%(step).3i" number="%(number).3i" type="%(type)s" result="%(result)s" url=%(url)s code="%(code)s" description=%(description)s time="%(time_start)s" duration="%(duration)s" />"''' % info
-        self._logr(message)
 
     def _log_result(self, time_start, time_stop):
         """Log the test result."""
         info = {}
-        info['cycle'] = self.cycle
-        info['cvus'] = self.cvus
-        info['thread_id'] = self.thread_id
-        info['suite_name'] = self.suite_name
-        info['test_name'] = self.test_name
         info['steps'] = self.steps
-        info['time_start'] = time_start
-        info['duration'] = time_stop - time_start
         info['connection_duration'] = self.total_time
         info['requests'] = self.total_responses
         info['pages'] = self.total_pages
@@ -871,14 +817,6 @@ class FunkLoadTestCase(unittest.TestCase):
         info['redirects'] = self.total_redirects
         info['images'] = self.total_images
         info['links'] = self.total_links
-        info['result'] = self.test_status
-        if self.test_status != 'Successful':
-            info['traceback'] = 'traceback=' + quoteattr(' '.join(
-                traceback.format_exception(*sys.exc_info()))) + ' '
-        else:
-            info['traceback'] = ''
-        text = '''<testResult cycle="%(cycle).3i" cvus="%(cvus).3i" thread="%(thread_id).3i" suite="%(suite_name)s" name="%(test_name)s"  time="%(time_start)s" result="%(result)s" steps="%(steps)s" duration="%(duration)s" connection_duration="%(connection_duration)s" requests="%(requests)s" pages="%(pages)s" xmlrpc="%(xmlrpc)s" redirects="%(redirects)s" images="%(images)s" links="%(links)s" %(traceback)s/>''' % info
-        self._logr(text)
 
     def _dump_content(self, response):
         """Dump the html content in a file.
@@ -925,49 +863,56 @@ class FunkLoadTestCase(unittest.TestCase):
             result = self.defaultTestResult()
         result.startTest(self)
         if sys.version_info >= (2, 5):
-            testMethod = getattr(self, self._testMethodName)
+            methodName = self._testMethodName
         else:
-            testMethod = getattr(self, self._TestCase__testMethodName)
-        try:
-            ok = False
+            methodName = self._TestCase__testMethodName
+        testMethod = getattr(self, methodName)
+        with self.record({'test': methodName}) as metadata:
             try:
-                if not self.in_bench_mode:
-                    self.logd('Starting -----------------------------------\n\t%s'
-                              % self.conf_get(self.meta_method_name, 'description', ''))
-                self.setUp()
-            except KeyboardInterrupt:
-                raise
-            except:
-                result.addError(self, self.__exc_info())
-                self.test_status = 'Error'
-                self._log_result(t_start, time.time())
-                return
-            try:
-                testMethod()
-                ok = True
-            except self.failureException:
-                result.addFailure(self, self.__exc_info())
-                self.test_status = 'Failure'
-            except KeyboardInterrupt:
-                raise
-            except:
-                result.addFailure(self, self.__exc_info())
-                self.test_status = 'Error'
-            try:
-                self.tearDown()
-            except KeyboardInterrupt:
-                raise
-            except:
-                result.addFailure(self, self.__exc_info())
-                self.test_status = 'Error'
                 ok = False
-            if ok:
-                result.addSuccess(self)
-        finally:
-            self._log_result(t_start, time.time())
-            if not ok and self._stop_on_fail:
-                result.stop()
-            result.stopTest(self)
+                try:
+                    if not self.in_bench_mode:
+                        self.logd('Starting -----------------------------------\n\t%s'
+                                  % self.conf_get(self.meta_method_name, 'description', ''))
+                    self.setUp()
+                except KeyboardInterrupt:
+                    raise
+                except:
+                    result.addError(self, self.__exc_info())
+                    metadata['result'] = 'Error'
+                    metadata['traceback'] = quoteattr(' '.join(
+                        traceback.format_exception(*sys.exc_info())))
+                    return
+                try:
+                    testMethod()
+                    ok = True
+                except self.failureException:
+                    result.addFailure(self, self.__exc_info())
+                    metadata['result'] = 'Failure'
+                except KeyboardInterrupt:
+                    raise
+                except:
+                    result.addFailure(self, self.__exc_info())
+                    metadata['result'] = 'Error'
+                    metadata['traceback'] = quoteattr(' '.join(
+                        traceback.format_exception(*sys.exc_info())))
+                try:
+                    self.tearDown()
+                except KeyboardInterrupt:
+                    raise
+                except:
+                    result.addFailure(self, self.__exc_info())
+                    metadata['result'] = 'Error'
+                    metadata['traceback'] = quoteattr(' '.join(
+                        traceback.format_exception(*sys.exc_info())))
+                    ok = False
+                if ok:
+                    result.addSuccess(self)
+            finally:
+                self._log_result(t_start, time.time())
+                if not ok and self._stop_on_fail:
+                    result.stop()
+                result.stopTest(self)
 
 
 

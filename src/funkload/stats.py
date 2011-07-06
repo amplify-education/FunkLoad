@@ -3,7 +3,7 @@ import threading
 from Queue import Queue, Empty
 from xmlrpclib import ServerProxy
 from utils import get_version, trace
-import time
+from datetime import datetime
 from xmlrpclib import Fault
 from socket import error as SocketError
 
@@ -21,7 +21,7 @@ class StatsWriterThread(threading.Thread):
 
     def write_header(self, config):
         header = '<funkload version="{version}" time="{time}">\n'.format(
-                            version=get_version(), time=time.time())
+                            version=get_version(), time=datetime.now().isoformat())
         self.output_fd.write(header)
         for key, value in config.items():
             stat = '<config key="{key}" value="{value}"/>\n'.format(key=key,

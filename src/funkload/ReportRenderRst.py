@@ -20,8 +20,11 @@
 $Id$
 """
 import os
+import json
 from shutil import copyfile
 from utils import get_version
+from utils import render_template
+from funkload.ReportStats import StatsAggregator, STATS_COLUMNS
 
 LI = '*'
 # ------------------------------------------------------------
@@ -237,18 +240,25 @@ class RenderRst:
     # number of slowest requests to display
     slowest_items = 5
 
-    def __init__(self, config, stats, error, monitor, monitorconfig, options):
+    def __init__(self, config, stats, monitor, monitorconfig, options):
         self.config = config
         self.stats = stats
-        self.error = error
         self.monitor = monitor
         self.monitorconfig = monitorconfig
         self.options = options
         self.rst = []
+        self.image_paths = {}
 
-        cycles = stats.keys()
-        cycles.sort()
-        self.cycles = cycles
+        self.cycles = json.loads(config['cycles'])
+
+        self.aggr_stats = {}
+        for aggr_key, aggr_stats in self.stats.items():
+
+            for cycle in range(len(self.cycles)):
+                self.aggr_stats.setdefault(aggr_key, {})[cycle] = StatsAggregator([
+                    cycle_stats[cycle] for cycle_stats in aggr_stats.values() if cycle in cycle_stats
+                ])
+
         if options.with_percentiles:
             BaseRst.with_percentiles = True
         if options.html:
@@ -600,102 +610,24 @@ class RenderRst:
                         len(errors[err_type]),
                         err_type[0], traceback))
 
-    def renderDefinitions(self):
-        """Render field definition."""
-        self.append(rst_title("Definitions", 2))
-        self.append(LI + ' CUs: Concurrent users or number of concurrent threads'
-                    ' executing tests.')
-        self.append(LI + ' Request: a single GET/POST/redirect/xmlrpc request.')
-        self.append(LI + ' Page: a request with redirects and resource'
-                    ' links (image, css, js) for an html page.')
-        self.append(LI + ' STPS: Successful tests per second.')
-        self.append(LI + ' SPPS: Successful pages per second.')
-        self.append(LI + ' RPS: Requests per second, successful or not.')
-        self.append(LI + ' maxSPPS: Maximum SPPS during the cycle.')
-        self.append(LI + ' maxRPS: Maximum RPS during the cycle.')
-        self.append(LI + ' MIN: Minimum response time for a page or request.')
-        self.append(LI + ' AVG: Average response time for a page or request.')
-        self.append(LI + ' MAX: Maximmum response time for a page or request.')
-        self.append(LI + ' P10: 10th percentile, response time where 10 percent'
-                    ' of pages or requests are delivered.')
-        self.append(LI + ' MED: Median or 50th percentile, response time where half'
-                    ' of pages or requests are delivered.')
-        self.append(LI + ' P90: 90th percentile, response time where 90 percent'
-                    ' of pages or requests are delivered.')
-        self.append(LI + ' P95: 95th percentile, response time where 95 percent'
-                    ' of pages or requests are delivered.')
-        self.append(LI + ''' Apdex T: Application Performance Index, 
-  this is a numerical measure of user satisfaction, it is based
-  on three zones of application responsiveness:
-
-  - Satisfied: The user is fully productive. This represents the
-    time value (T seconds) below which users are not impeded by
-    application response time.
-
-  - Tolerating: The user notices performance lagging within
-    responses greater than T, but continues the process.
-
-  - Frustrated: Performance with a response time greater than 4*T
-    seconds is unacceptable, and users may abandon the process.
-
-    By default T is set to 1.5s this means that response time between 0
-    and 1.5s the user is fully productive, between 1.5 and 6s the
-    responsivness is tolerating and above 6s the user is frustrated.
-
-    The Apdex score converts many measurements into one number on a
-    uniform scale of 0-to-1 (0 = no users satisfied, 1 = all users
-    satisfied).
-
-    Visit http://www.apdex.org/ for more information.''')
-        self.append(LI + ''' Rating: To ease interpretation the Apdex
-  score is also represented as a rating:
-
-  - U for UNACCEPTABLE represented in gray for a score between 0 and 0.5 
-
-  - P for POOR represented in red for a score between 0.5 and 0.7
-
-  - F for FAIR represented in yellow for a score between 0.7 and 0.85
-
-  - G for Good represented in green for a score between 0.85 and 0.94
-
-  - E for Excellent represented in blue for a score between 0.94 and 1.''')
-        self.append('')
-        self.append('Report generated with FunkLoad_ ' + get_version() +
-                    ', more information available on the '
-                    '`FunkLoad site <http://funkload.nuxeo.org/#benching>`_.')
 
     def renderHook(self):
         """Hook for post processing"""
         pass
 
     def __repr__(self):
-        self.renderConfig()
-        if not self.cycles:
-            self.append('No cycle found')
-            return '\n'.join(self.rst)
-        cycle_r = self.getRepresentativeCycleStat()
+        
 
-        if cycle_r.has_key('test'):
-            self.renderTestContent(cycle_r['test'])
-
-        self.renderCyclesStat('test', 'Test stats',
-                              'The number of Successful **Tests** Per Second '
-                              '(STPS) over Concurrent Users (CUs).')
-        self.renderCyclesStat('page', 'Page stats',
-                              'The number of Successful **Pages** Per Second '
-                              '(SPPS) over Concurrent Users (CUs).\n'
-                              'Note that an XML RPC call count like a page.')
-        self.renderCyclesStat('response', 'Request stats',
-                              'The number of **Requests** Per Second (RPS) '
-                              'successful or not over Concurrent Users (CUs).')
-        self.renderSlowestRequests(self.slowest_items)
-        self.renderMonitors()
-        self.renderPageDetail(cycle_r)
-        self.renderPageByDescription()
-        self.renderErrors()
-        self.renderDefinitions()
-        self.renderHook()
-        return '\n'.join(self.rst)
+        return render_template('report/rst.mako',
+            cycles = self.cycles,
+            stats_columns=STATS_COLUMNS,
+            allstats=self.stats,
+            aggregate_stats=self.aggr_stats,
+            monitor_charts=self.createMonitorCharts(),
+            config=self.config,
+            date=self.date,
+            apdex_t="%.1f" % self.options.apdex_t,
+            image_paths=self.createResultCharts())
 
 
 

@@ -35,8 +35,8 @@ class RenderHtmlBase(RenderRst):
     chart_size = (350, 250)
     big_chart_size = (640, 480)
 
-    def __init__(self, config, stats, error, monitor, monitorconfig, options, css_file=None):
-        RenderRst.__init__(self, config, stats, error, monitor, monitorconfig, options)
+    def __init__(self, config, stats, monitor, monitorconfig, options, css_file=None):
+        RenderRst.__init__(self, config, stats, monitor, monitorconfig, options)
         self.css_file = css_file
         self.report_dir = self.css_path = self.rst_path = self.html_path = None
 
@@ -82,11 +82,9 @@ class RenderHtmlBase(RenderRst):
 
     def createRstFile(self):
         """Create the ReST file."""
-        rst_path = os.path.join(self.report_dir, 'index.rst')
-        f = open(rst_path, 'w')
-        f.write(unicode(self).encode("utf-8"))
-        f.close()
-        self.rst_path = rst_path
+        self.rst_path = os.path.join(self.report_dir, 'index.rst')
+        with open(self.rst_path, 'w') as f:
+            f.write(unicode(self).encode("utf-8"))
 
     def copyCss(self):
         """Copy the css to the report dir."""
@@ -142,39 +140,37 @@ class RenderHtmlBase(RenderRst):
 
     def createCharts(self):
         """Create all charts."""
-        self.createTestChart()
-        self.createPageChart()
-        self.createAllResponseChart()
-        for step_name in self.steps:
-            self.createResponseChart(step_name)
-        for index, key in enumerate(self.pages):
-            self.createResponseDescriptionChart(key, index)
+        #self.createTestChart()
+        #self.createPageChart()
+        #self.createAllResponseChart()
+        #for step_name in self.steps:
+        #    self.createResponseChart(step_name)
+        #for index, key in enumerate(self.pages):
+        #    self.createResponseDescriptionChart(key, index)
 
     # monitoring charts
     def createMonitorCharts(self):
-        """Create all montirored server charts."""
+        """Create all monitored server charts."""
         if not self.monitor or not self.with_chart:
             return
-        self.append(rst_title("Monitored hosts", 2))
+
         charts={}
         for host in self.monitor.keys():
             charts[host]=self.createMonitorChart(host)
         return charts
 
-    def createTestChart(self):
-        """Create the test chart."""
+    def createResultCharts(self):
+        """ Create all aggregate and breakout results charts """
+        if not self.with_chart:
+            return
 
-    def createPageChart(self):
-        """Create the page chart."""
-
-    def createAllResponseChart(self):
-        """Create global responses chart."""
-
-    def createResponseChart(self, step):
-        """Create responses chart."""
-
-    def createMonitorChart(self, host):
-        """Create monitrored server charts."""
-
-
-
+        charts={}
+        for group_name, grouped_stats in self.stats.items():
+            for value, cycle_stats in grouped_stats.items():
+                key = group_name, value
+                charts[key] = self.createResultChart(key, cycle_stats)
+        
+        for group_name, aggregate_stats in self.aggr_stats.items():
+            charts[group_name] = self.createResultChart(group_name, aggregate_stats)
+        
+        return charts
