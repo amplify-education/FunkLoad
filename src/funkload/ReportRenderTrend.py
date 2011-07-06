@@ -25,7 +25,6 @@ anykey:anyvalue
 a multi line description in ReST will be displayed in the listing parts
 """
 import os
-from ReportRenderRst import rst_title
 from ReportRenderHtmlBase import RenderHtmlBase
 from ReportRenderHtmlGnuPlot import gnuplot
 from ReportRenderDiff import getRPath

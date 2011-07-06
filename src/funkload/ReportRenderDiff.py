@@ -20,7 +20,6 @@
 $Id$
 """
 import os
-from ReportRenderRst import rst_title
 from ReportRenderHtmlBase import RenderHtmlBase
 from ReportRenderHtmlGnuPlot import gnuplot
 

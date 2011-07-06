@@ -24,7 +24,7 @@ $Id$
 """
 import os
 from shutil import copyfile
-from ReportRenderRst import RenderRst, rst_title
+from ReportRenderRst import RenderRst
 
 
 class RenderHtmlBase(RenderRst):
@@ -32,25 +32,10 @@ class RenderHtmlBase(RenderRst):
 
     Simply render stuff in ReST than ask docutils to build an html doc.
     """
-    chart_size = (350, 250)
-    big_chart_size = (640, 480)
-
     def __init__(self, config, stats, monitor, monitorconfig, options, css_file=None):
         RenderRst.__init__(self, config, stats, monitor, monitorconfig, options)
         self.css_file = css_file
         self.report_dir = self.css_path = self.rst_path = self.html_path = None
-
-    def getChartSize(self, cvus):
-        """Compute the right size lenght depending on the number of cvus."""
-        size = list(self.chart_size)
-        len_cvus = len(cvus)
-        chart_size = self.chart_size
-        big_chart_size = self.big_chart_size
-        if ((len_cvus * 50) > chart_size[0]):
-            if (len_cvus * 50 < big_chart_size):
-                return ((len_cvus * 50), big_chart_size[1])
-            return big_chart_size
-        return chart_size
 
     def generateReportDirectory(self, output_dir):
         """Generate a directory name for a report."""
@@ -131,22 +116,11 @@ class RenderHtmlBase(RenderRst):
         except ImportError:
             print "WARNING docutils not found, no html output."
             return ''
-        self.createCharts()
         self.copyXmlResult()
         return os.path.abspath(self.html_path)
 
     __call__ = render
 
-
-    def createCharts(self):
-        """Create all charts."""
-        #self.createTestChart()
-        #self.createPageChart()
-        #self.createAllResponseChart()
-        #for step_name in self.steps:
-        #    self.createResponseChart(step_name)
-        #for index, key in enumerate(self.pages):
-        #    self.createResponseDescriptionChart(key, index)
 
     # monitoring charts
     def createMonitorCharts(self):
