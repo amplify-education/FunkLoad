@@ -21,6 +21,7 @@ import os
 import xml.parsers.expat
 from xml.etree.ElementTree import Element, tostring, XML
 from utils import trace
+from xml.sax.saxutils import quoteattr, escape
 
 class EndOfConfig(Exception):
     pass
@@ -47,7 +48,7 @@ class FunkLoadConfigXmlParser:
         parser.StartElementHandler = self.handleStartElement
         try:
             parser.ParseFile(file(xml_file))
-        except xml.parsers.expat.ExpatError, msg:
+        except xml.parsers.expat.ExpatError as msg:
             if (self.current_element[-1]['name'] == 'funkload'
                 and str(msg).startswith('no element found')):
                 print "Missing </funkload> tag."
@@ -99,6 +100,71 @@ class FunkLoadConfigXmlParser:
             self.files.append(self.current_file)
             raise EndOfConfig
 
+class FunkLoadContentMergeParser:
+    def __init__(self, output, node_count):
+        self.output = output
+        self.skipped_elements = ('config', 'funkload')
+        self.node_count = node_count
+
+    def parse(self, filename, node_id):
+        self.node_id = node_id
+        try:
+            parser = xml.parsers.expat.ParserCreate()
+            parser.StartElementHandler = self.handleStartElement
+            parser.EndElementHandler = self.handleEndElement
+            parser.CharacterDataHandler = self.handleCharData
+
+            with open(filename) as xml_file:
+                parser.ParseFile(xml_file)
+        except xml.parsers.expat.ExpatError as msg:
+            if (self.current_element[-1]['name'] == 'funkload'
+                and str(msg).startswith('no element found')):
+                print "Missing </funkload> tag."
+            else:
+                print 'Error: invalid xml bench result file'
+                if len(self.current_element) <= 1 or (
+                    self.current_element[1]['name'] != 'funkload'):
+                    print """Note that you can generate a report only for a
+                    bench result done with fl-run-bench (and not on a test
+                    result done with fl-run-test)."""
+                else:
+                    print """You may need to remove non ascii char that comes
+                    from error pages catched during the bench. iconv
+                    or recode may help you."""
+                print 'Xml parser element stack: %s' % [
+                    x['name'] for x in self.current_element]
+                raise
+
+    def handleStartElement(self, name, attrs):
+        if name in self.skipped_elements:
+            return
+
+        if 'thread_id' in attrs:
+            attrs['thread_id'] = "{node}-{thread}".format(
+                node = self.node_id,
+                thread = attrs['thread_id']
+            )
+
+        if 'cvus' in attrs:
+            attrs['cvus'] = str(int(attrs['cvus'])*self.node_count)
+
+        self.output.write("<{name} {attrs}>".format(
+            name=name,
+            attrs=" ".join('{name}={value}'.format(name=name, value=quoteattr(value))
+                for (name, value) in attrs.items()),
+        ))
+
+    def handleEndElement(self, name):
+        if name in self.skipped_elements:
+            return
+
+        self.output.write("</{name}>".format(name=name))
+
+    def handleCharData(self, data):
+        self.output.write(escape(data))
+
+
+
 def replace_all(text, dic):
     for i, j in dic.iteritems():
         if isinstance(text, str):
@@ -142,25 +208,9 @@ class MergeResultFiles:
                 output.write(tostring(Element('config', key=key, value=value)))
                 output.write('\n')
 
+            mergeParser = FunkLoadContentMergeParser(output, node_count)
             for i, input_file in enumerate(xml_parser.files):
-                f = open(input_file)
-                for line in f.xreadlines():
-                    if ('</funkload>' in line or
-                        '<funkload' in line or
-                        '<config' in line):
-                        continue
-                    element = XML(line)
-                    if 'thread_id' in element.attrib:
-                        element.attrib['thread_id'] = "{node}-{thread}".format(
-                            node = i,
-                            thread = element.attrib['thread_id']
-                        )
-
-                    if 'cvus' in element.attrib:
-                        element.attrib['cvus'] = str(int(element.attrib['cvus'])*node_count)
-                    output.write(tostring(element))
-                    output.write('\n')
-                f.close()
+                mergeParser.parse(input_file, i)
             output.write("</funkload>\n")
 
 

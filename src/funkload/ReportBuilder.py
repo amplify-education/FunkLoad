@@ -62,14 +62,14 @@ from collections import defaultdict
 from optparse import OptionParser, TitledHelpFormatter
 from tempfile import NamedTemporaryFile
 
-from ReportStats import StatsAccumulator
-from ReportStats import MonitorStat
+from ReportStats import StatsAccumulator, MonitorStat, ErrorStat
 from ReportRenderRst import RenderRst
 from ReportRenderHtml import RenderHtml
 from ReportRenderDiff import RenderDiff
 from ReportRenderTrend import RenderTrend
 from MergeResultFiles import MergeResultFiles
 from utils import trace, get_version
+from FunkLoadTestCase import RESPONSE_BY_STEP, RESPONSE_BY_DESCRIPTION, PAGE, TEST
 
 
 # ------------------------------------------------------------
@@ -149,6 +149,8 @@ class FunkLoadXmlParser:
         """Processing element."""
         element = self.current_element.pop()
         attrs = element['attrs']
+        cycle = int(attrs.get('cycle', -1))
+
         if name == 'aggregate':
             # Add this aggregation key to the list on the parent record
             self.current_element[-1]['attrs'].setdefault('aggregates', []).append(
@@ -156,22 +158,49 @@ class FunkLoadXmlParser:
         elif name == 'result':
             # set the result as an attribute of the parend record
             self.current_element[-1]['attrs']['result'] = "".join(element['contents'])
-        elif name == 'record':
-            cycle = int(attrs['cycle'])
-            for key, value in attrs.get('aggregates', []):
-                self.stats[key][value][cycle].add_record(
-                    float(attrs['time']),
-                    float(attrs['duration']),
-                    attrs['result'] == 'Successful'
-                )
         elif name == 'monitor':
             host = attrs.get('host')
             stats = self.monitor.setdefault(host, [])
             stats.append(MonitorStat(attrs))
-        elif name =='monitorconfig':
+        elif name == 'monitorconfig':
             host = attrs.get('host')
             config = self.monitorconfig.setdefault(host, {})
             config[attrs.get('key')]=attrs.get('value')
+        # Handle all test results
+        else:
+            time = float(attrs.get('time', -1))
+            duration = float(attrs.get('duration', -1))
+            result = attrs.get('result')
+            successful = result == 'Successful'
+
+            if not successful:
+                error = ErrorStat(result=result,
+                    code=attrs.get('code'), headers=attrs.get('headers'),
+                    body=attrs.get('body'), traceback=attrs.get('traceback'))
+            else:
+                error = None
+
+            def add_record(key, value):
+                self.stats[key][value][cycle].add_record(
+                    time,
+                    duration,
+                    error
+                )
+
+            # Handle new-style results files
+            if name == 'record':
+                for key, value in attrs.get('aggregates', []):
+                    add_record(key, value)
+            # Handle old-style results files
+            elif name == 'testResult':
+                add_record('Test', TEST.format(name=attrs['name']))
+            elif name == 'response':
+                if not attrs['url'].startswith('http'):
+                    attrs['url'] = self.config['server_url'] + attrs['url']
+                add_record('Response by step', RESPONSE_BY_STEP.format(**attrs))
+                add_record('Response by description', RESPONSE_BY_DESCRIPTION.format(**attrs))
+                if attrs['type'] in ('get', 'post', 'xmlrpc'):
+                    add_record('Page', PAGE.format(**attrs))
 
     def handleCharacterData(self, data):
         self.current_element[-1].setdefault('contents', []).append(data)

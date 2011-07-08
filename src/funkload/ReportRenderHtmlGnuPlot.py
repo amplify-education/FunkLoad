@@ -166,7 +166,7 @@ class RenderHtmlGnuPlot(RenderHtmlBase):
         with open(gplot_path, 'w') as gplot_file:
             gplot_file.write(render_template('gnuplot/result.mako',
                 image_path=image_path,
-                chart_size=[640, 800],
+                chart_size=[800, 800],
                 maxCVUs=max(self.cycles),
                 datapoints=len(self.cycles),
                 use_xticlabels=self.useXTicLabels(),

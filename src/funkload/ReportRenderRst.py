@@ -51,6 +51,11 @@ class RenderRst:
                     cycle_stats[cycle] for cycle_stats in aggr_stats.values() if cycle in cycle_stats
                 ])
 
+        if options.html:
+            self.with_chart = True
+        else:
+            self.with_chart = False
+
         self.date = config['time'][:19].replace('T', ' ')
 
     def append(self, text):

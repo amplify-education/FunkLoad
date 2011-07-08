@@ -49,6 +49,11 @@ from xmlrpclib import ServerProxy
 
 _marker = []
 
+RESPONSE_BY_STEP = "Request {step}.{number}: {type} - {url}"
+RESPONSE_BY_DESCRIPTION = "{type} {url}: {description}"
+PAGE = "{type} {url}: {description}"
+TEST = "Test: {name}"
+
 # ------------------------------------------------------------
 # Classes
 #
@@ -867,7 +872,7 @@ class FunkLoadTestCase(unittest.TestCase):
         else:
             methodName = self._TestCase__testMethodName
         testMethod = getattr(self, methodName)
-        with self.record({'test': methodName}) as metadata:
+        with self.record({'Test': methodName}) as metadata:
             try:
                 ok = False
                 try:

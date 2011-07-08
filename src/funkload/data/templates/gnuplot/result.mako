@@ -13,15 +13,17 @@ ${g.multiplot(2, 2, 1.4)}
 
 % if not use_xticlabels:
 set xrange [0:${maxCVUs+1}]
+set bmargin .5
+set tmargin .5
 % else:
+set bmargin 1
+set tmargin 1
 set xrange [0.5:${datapoints + .5}]
 % endif
 
 set format x ""
 unset title
 unset xlabel
-set bmargin 1
-set tmargin 1
 set lmargin 8
 set rmargin 9.5
 set key inside top

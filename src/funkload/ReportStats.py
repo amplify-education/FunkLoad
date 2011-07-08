@@ -23,6 +23,52 @@ from __future__ import division
 from heapq import heappop, heappush, heapify
 from collections import defaultdict
 
+class ErrorStat(object):
+    """Collect Error or Failure stats."""
+    def __init__(self, result, code, traceback, headers={}, body=None):
+        self._result = result
+        try:
+            self._code = int(code)
+        except TypeError:
+            self._code = None
+        self._headers = tuple(headers.items()) if headers else ()
+        self._body = body or None
+        self._traceback = traceback
+
+    @property
+    def result(self):
+        return self._result
+
+    @property
+    def code(self):
+        return self._code
+
+    @property
+    def headers(self):
+        return dict(self._headers)
+
+    @property
+    def body(self):
+        return self._body
+
+    @property
+    def traceback(self):
+        return self._traceback
+
+    @property
+    def as_tuple(self):
+        return (self.result, self.code, self._headers, self.body, self.traceback)
+
+    def __hash__(self):
+        return hash(self.as_tuple)
+
+    def __eq__(self, other):
+        return self.as_tuple == other.as_tuple
+
+    def __cmp__(self, other):
+        return cmp(self.as_tuple, other.as_tuple)
+
+
 class MonitorStat:
     """Collect system monitor info."""
     def __init__(self, attrs):
@@ -76,8 +122,9 @@ class StatsAccumulator(object):
         self.apdex = ApdexStat(apdex_t)
         self.duration = duration
         self.per_second = {}
+        self.error_details = defaultdict(int)
     
-    def add_record(self, time, value, success):
+    def add_record(self, time, value, error=None):
         """
         Add an entry to this stats collection
         """
@@ -90,10 +137,11 @@ class StatsAccumulator(object):
         self.per_second[second] = self.per_second.setdefault(second, 0) + 1
         self.apdex.add(value)
 
-        if success:
+        if not error:
             self.successes += 1
         else:
             self.errors += 1
+            self.error_details[error] += 1
 
         self._sorted = False
 
@@ -199,11 +247,19 @@ class StatsAggregator(object):
         return len(self) / self.substats[0].duration
 
     @property
+    def error_details(self):
+        error_details = defaultdict(int)
+        for stat in self.substats:
+            for error, count in stat.error_details.items():
+                error_details[error] = error_details[error] + count
+        return error_details
+
+    @property
     def per_second(self):
-        per_second = {}
+        per_second = defaultdict(int)
         for stat in self.substats:
             for sec, count in stat.per_second.items():
-                per_second[sec] = per_second.setdefault(sec, 0) + count
+                per_second[sec] = per_second[sec] + count
         return per_second
 
     @property

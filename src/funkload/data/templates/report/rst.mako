@@ -1,8 +1,23 @@
-<%def name="render_title(text, level=1)">
 <%
-    rst_level = ['=', '=', '-', '~']
+unique_errors = set()
+for substats in allstats.values():
+    for cycle_stats in substats.values():
+        for cycle in cycle_stats.values():
+            unique_errors.update(cycle.error_details.keys())
+error_ids = dict((error, i) for (i, error) in enumerate(sorted(unique_errors)))
+%>
+
+<%def name="literal_block()">
+::
+${'    ' + '\n    '.join(capture(caller.body).split('\n'))}
+</%def>
+
+<%def name="title(level=1)">
+<%
+    rst_level = ['=', '=', '-', '~', '^']
     char = rst_level[level]
-    length = len(text)
+    text = capture(caller.body).strip()
+    length = len(str(text))
 %>
 % if level == 0:
 ${char*length}
@@ -12,60 +27,108 @@ ${char*length}
 </%def>
 
 <%def name="render_stats_table(column_names, stats)">
-
 <%! import itertools %>
 <% 
-stats = [[cycles[cycle]] + row.stats_list() for (cycle, row) in sorted(stats.items())]
-column_width = max(len(str(v)) for v in itertools.chain(column_names, *stats))
+def format_value(value):
+    if isinstance(value, float):
+        return "%.3f" % value
+    else:
+        return str(value)
+
+def format_row(row):
+    return [format_value(v) for v in row]
+
+stats = [[str(cycles[cycle])] + format_row(row.stats_list())
+    for (cycle, row) in sorted(stats.items())]
+
+columns = zip(*([column_names] + stats))
+column_widths = [max(len(v) for v in column) for column in columns]
 %>
 
-<%def name="divider()">
-% for _ in column_names:
-${'='*column_width} \
-% endfor
+<%def name="divider()">\
+${' '.join('='*w for w in column_widths)}\
 </%def>
 
 ${divider()}
-% for column in column_names:
-${column.center(column_width)} \
+% for column, width in zip(column_names, column_widths):
+${column.center(width)} \
 % endfor
+
 ${divider()}
 % for row in stats:
-% for value in row:
-${str(value).center(column_width)} \
+% for value, width in zip(row, column_widths):
+${value.center(width)} \
 % endfor
 
 % endfor
 ${divider()}
+</%def>
+
+<%def name="render_stats(title, image_path, stats, level=1)">
+<%self:title level="${level}">${title}</%self:title>
+% if image_path in image_paths:
+.. image:: ${image_paths[image_path]}
+% endif
+
+${render_stats_table(stats_columns, stats)}
+
+% if sum(s.errors for s in stats.values()) > 0:
+<%self:title level="${level+1}">Errors</%self:title>
+% for cycle, cycle_stats in stats.items():
+% if cycle_stats.errors > 0:
+<%self:title level="${level+2}">Cycle ${cycle}</%self:title>
+% for error, count in sorted(cycle_stats.error_details.items()):
+- error${error_ids[error]}_: ${count}
+% endfor
+% endif
+% endfor
+% endif
+
 </%def>
 
 <%def name="render_aggregate_stats(name, aggregated_stats, substats)">
-${render_title(name, 2)}
-% if name in image_paths:
-.. image:: ${image_paths[name]}
-% endif
-
-${render_stats_table(stats_columns, aggregated_stats)}
+${render_stats(name, name, aggregated_stats)}
 
 % if len(substats) > 1:
-% for substat, cycles_stats in substats.items():
+% for substat, cycles_stats in sorted(substats.items()):
 ${render_stats_display(name, substat, cycles_stats)}
 % endfor
 % endif
 </%def>
 
 <%def name="render_stats_display(aggregate_name, stat_name, stats)">
-${render_title(stat_name, 3)}
+${render_stats(stat_name, (aggregate_name, stat_name), stats, 2)}
+</%def>
 
-% if (aggregate_name, stat_name) in image_paths:
-.. image:: ${image_paths[(aggregate_name, stat_name)]}
+<%def name="error_details()">
+% for index, error in enumerate(sorted(unique_errors)):
+.. _error${index}:
+<%self:title level="${2}">Error ${index}</%self:title>
+
+% if error.code >= 0:
+<%self:title level="${3}">Http Response</%self:title>
+HTTP ${error.code}
+% for name, value in sorted(error.headers):
+${name}: value
+% endfor
+% if error.body:
+${error.body}
+% endif
 % endif
 
-${render_stats_table(stats_columns, stats)}
+% if error.traceback:
+<%self:title level="${3}">Traceback</%self:title>
+<%self:literal_block>
+${error.traceback}
+</%self:literal_block>
+% endif
+
+% endfor
 </%def>
 
 <%block name="header_display">
-${render_title("Funkload_ bench report", 0)}
+<%self:title level="${0}">Funkload_ bench report</%self:title>
+
 :date: ${date}
 :abstract:
         ${config['class_description']}
@@ -75,11 +138,12 @@ ${render_title("Funkload_ bench report", 0)}
 .. _FunkLoad: http://funkload.nuxeo.org/
 .. sectnum:: :depth: 2
 .. contents:: Table of contents
+    :depth: 2
 .. |APDEXT| replace:: \ :sub:`${apdex_t}`
 </%block>
 
 <%block name="config_display">
-${render_title("Bench configuration", 2)}
+<%self:title>Bench configuration</%self:title>
 * Launched: ${date}
 % if config.get('node'):
 * From: ${config['node']}
@@ -114,23 +178,25 @@ ${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
 % endfor
 
 % if monitor_charts:
-    ${render_title("Monitored hosts", 2)}
-    <%block name="monitors">
-    % for host, charts in monitor_charts.items():
-    ${render_title(host + ": " + config.get(host, ''), 3)}
-    % for chart_title, chart_image in charts:
-    **${chart_title}**
+<%self:title>Monitored hosts</%self:title>
+<%block name="monitors">
+% for host, charts in monitor_charts.items():
+<%self:title level="${2}">${host}: ${config.get(host, '')}</%self:title>
+% for chart_title, chart_image in charts:
+**${chart_title}**
 
-    .. image:: ${chart_image}
+.. image:: ${chart_image}
 
-    % endfor
-    % endfor
-    </%block>
+% endfor
+% endfor
+</%block>
 % endif
 
+<%self:title>Error Details</%self:title>
+${error_details()}
+
 <%block name="definitions">
-Definitions
------------
+<%self:title>Definitions</%self:title>
 * CUs: Concurrent users or number of concurrent threads executing tests.
 * Request: a single GET/POST/redirect/xmlrpc request.
 * Page: a request with redirects and resource links (image, css, js) for an html page.

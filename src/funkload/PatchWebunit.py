@@ -118,7 +118,7 @@ class FKLIMGSucker(IMGSucker):
                         try:
                             self.session.images[url] = self.session.fetch(url)
                             self.session.history.append(('image', url))
-                            metadata['response'] = self.session.images[url]
+                            metadata['url'] = url
                         except HTTPError as error:
                             if self.ftestcase._accept_invalid_links:
                                 if not self.ftestcase.in_bench_mode:
@@ -153,7 +153,7 @@ class FKLIMGSucker(IMGSucker):
                         try:
                             self.session.css[url] = self.session.fetch(url)
                             self.session.history.append(('link', url))
-                            metadata['response'] = self.session.css[url]
+                            metadata['url'] = url
                         except HTTPError as error:
                             if self.ftestcase._accept_invalid_links:
                                 if not self.ftestcase.in_bench_mode:
