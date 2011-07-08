@@ -155,9 +155,9 @@ class FunkLoadXmlParser:
             # Add this aggregation key to the list on the parent record
             self.current_element[-1]['attrs'].setdefault('aggregates', []).append(
                 (element['attrs']['name'], "".join(element['contents'])))
-        elif name == 'result':
-            # set the result as an attribute of the parend record
-            self.current_element[-1]['attrs']['result'] = "".join(element['contents'])
+        elif name in ('result', 'traceback', 'response_code', 'headers', 'body'):
+            # set the result as an attribute of the parent record
+            self.current_element[-1]['attrs'][name] = "".join(element['contents'])
         elif name == 'monitor':
             host = attrs.get('host')
             stats = self.monitor.setdefault(host, [])
@@ -167,6 +167,9 @@ class FunkLoadXmlParser:
             config = self.monitorconfig.setdefault(host, {})
             config[attrs.get('key')]=attrs.get('value')
         # Handle all test results
+        elif name in ('funkload', 'config'):
+            # These get handled elsewhere
+            pass
         else:
             time = float(attrs.get('time', -1))
             duration = float(attrs.get('duration', -1))

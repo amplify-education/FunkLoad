@@ -204,14 +204,7 @@ class FunkLoadTestCase(unittest.TestCase):
             # enable empty put/post
             params = []
         
-        step = self.steps
-        number = self.page_responses
-        with self.record({'Request by step': (step, number),
-                          'Request by description': (url, description)},
-                         description=description,
-                         rtype=rtype,
-                         redirect=redirect,
-                         url=url) as metadata:
+        with self.record_response(rtype, url, description, redirect=redirect) as metadata:
             try:
                 response = self._browser.fetch(url, params, ok_codes=ok_codes,
                                                key_file=self._keyfile_path,
@@ -219,7 +212,7 @@ class FunkLoadTestCase(unittest.TestCase):
                 metadata['test_status'] = 'Success'
                 metadata['response_code'] = response.code
 
-                if rtype in ('put','post', 'get', 'delete'):
+                if rtype in ('put', 'post', 'get', 'delete'):
                     # this is a valid referer for the next request
                     self.setHeader('Referer', url)
                 self._browser.history.append((rtype, url))
@@ -228,15 +221,9 @@ class FunkLoadTestCase(unittest.TestCase):
                 return response
 
             except HTTPError as exc:
-                metadata['body'] = exc.response.body
-                metadata['headers'] = "\n".join(": ".join(header) for header in exc.response.headers.items())
-                metadata['result'] = 'Failure'
-                metadata['response_code'] = exc.response.code
                 if self._dumping:
                     self._dump_content(exc.response)
-                raise self.failureException, str(exc.response)
-            except SocketError:
-                raise SocketError("Can't load %s." % url)
+                raise
 
     def _browse(self, url_in, params_in=None,
                 description=None, ok_codes=None,
@@ -435,19 +422,15 @@ class FunkLoadTestCase(unittest.TestCase):
             url = url_in
         
         method_url = url_in + "#" + method_name
-        with self.record({'xmlrpc': method_url}, url=method_url,
-                description=description):
-            try:
-                server = ServerProxy(url)
-                method = getattr(server, method_name)
-                if params is not None:
-                    response = method(*params)
-                else:
-                    response = method()
-                self.sleep()
-                return response
-            except SocketError:
-                raise SocketError("Can't access %s." % url)
+        with self.record_response('xmlrpc', method_url, description):
+            server = ServerProxy(url)
+            method = getattr(server, method_name)
+            if params is not None:
+                response = method(*params)
+            else:
+                response = method()
+            self.sleep()
+            return response
 
     def xmlrpc_call(self, url_in, method_name, params=None, description=None):
         """BBB of xmlrpc, this method will be removed for 1.6.0."""
@@ -730,6 +713,28 @@ class FunkLoadTestCase(unittest.TestCase):
         self._logr('</funkload>', force=True)
 
     @contextmanager
+    def record_response(self, rtype, url, description, **kwargs):
+        step = self.steps
+        number = self.page_responses
+        with self.record({'Response by step': RESPONSE_BY_STEP.format(
+                              step=step, number=number, type=rtype, url=url),
+                          'Response by description': RESPONSE_BY_DESCRIPTION.format(
+                              type=rtype, url=url, description=description)},
+                          url=url, rtype=rtype, description=description,
+                           **kwargs) as metadata:
+            try:
+                self.page_responses += 1
+                yield metadata
+            except HTTPError as exc:
+                metadata['body'] = exc.response.body
+                metadata['headers'] = "\n".join(": ".join(header) for header in exc.response.headers.items())
+                metadata['result'] = 'Failure'
+                metadata['response_code'] = exc.response.code
+                raise self.failureException, str(exc.response)
+            except SocketError:
+                raise SocketError("Can't load %s." % url)
+
+    @contextmanager
     def record(self, aggregates, **kwargs):
         info = {}
         info['cycle'] = str(self.cycle)
@@ -746,8 +751,8 @@ class FunkLoadTestCase(unittest.TestCase):
             raise
         except:
             kwargs['result'] = 'Error'
-            kwargs['traceback'] = quoteattr(' '.join(
-                traceback.format_exception(*sys.exc_info())))
+            kwargs['traceback'] = ' '.join(
+                traceback.format_exception(*sys.exc_info()))
             raise
         finally:
             info['time'] = str(start_time)
@@ -762,66 +767,6 @@ class FunkLoadTestCase(unittest.TestCase):
                 sub.text = str(value)
             self._logr(tostring(message))
 
-
-
-    def _log_response_error(self, url, rtype, description, time_start,
-                            time_stop):
-        """Log a response that raise an unexpected exception."""
-        info['step'] = self.steps
-        info['number'] = self.page_responses
-        info['type'] = rtype
-        info['url'] = quoteattr(url)
-        info['code'] = -1
-        info['description'] = description and quoteattr(description) or '""'
-
-    def _log_response(self, response, rtype, description, time_start,
-                      time_stop, log_body=False):
-        """Log a response."""
-        info['step'] = self.steps
-        info['number'] = self.page_responses
-        info['type'] = rtype
-        info['url'] = quoteattr(response.url)
-        info['code'] = response.code
-        info['description'] = description and quoteattr(description) or '""'
-
-        if not log_body:
-            message = response_start + ' />'
-        else:
-            response_start = response_start + '>\n  <headers>'
-            header_xml = []
-            if response.headers is not None:
-                for key, value in response.headers.items():
-                    header_xml.append('    <header name="%s" value=%s />' % (
-                            key, quoteattr(value)))
-            headers = '\n'.join(header_xml) + '\n  </headers>'
-            message = '\n'.join([
-                response_start,
-                headers,
-                '  <body><![CDATA[\n%s\n]]>\n  </body>' % response.body,
-                '</response>'])
-        self._logr(message)
-
-    def _log_xmlrpc_response(self, url, method, description, response,
-                             time_start, time_stop, code):
-        """Log a response."""
-        info['step'] = self.steps
-        info['number'] = self.page_responses
-        info['type'] = 'xmlrpc'
-        info['url'] = quoteattr(url + '#' + method)
-        info['code'] = code
-        info['description'] = description and quoteattr(description) or '""'
-
-    def _log_result(self, time_start, time_stop):
-        """Log the test result."""
-        info = {}
-        info['steps'] = self.steps
-        info['connection_duration'] = self.total_time
-        info['requests'] = self.total_responses
-        info['pages'] = self.total_pages
-        info['xmlrpc'] = self.total_xmlrpc
-        info['redirects'] = self.total_redirects
-        info['images'] = self.total_images
-        info['links'] = self.total_links
 
     def _dump_content(self, response):
         """Dump the html content in a file.
@@ -872,52 +817,37 @@ class FunkLoadTestCase(unittest.TestCase):
         else:
             methodName = self._TestCase__testMethodName
         testMethod = getattr(self, methodName)
-        with self.record({'Test': methodName}) as metadata:
-            try:
+        try:
+            with self.record({'Test': methodName}) as metadata:
                 ok = False
-                try:
-                    if not self.in_bench_mode:
-                        self.logd('Starting -----------------------------------\n\t%s'
-                                  % self.conf_get(self.meta_method_name, 'description', ''))
-                    self.setUp()
-                except KeyboardInterrupt:
-                    raise
-                except:
-                    result.addError(self, self.__exc_info())
-                    metadata['result'] = 'Error'
-                    metadata['traceback'] = quoteattr(' '.join(
-                        traceback.format_exception(*sys.exc_info())))
-                    return
+                if not self.in_bench_mode:
+                    self.logd('Starting -----------------------------------\n\t%s'
+                              % self.conf_get(self.meta_method_name, 'description', ''))
+                self.setUp()
                 try:
                     testMethod()
                     ok = True
                 except self.failureException:
                     result.addFailure(self, self.__exc_info())
                     metadata['result'] = 'Failure'
-                except KeyboardInterrupt:
-                    raise
-                except:
-                    result.addFailure(self, self.__exc_info())
-                    metadata['result'] = 'Error'
-                    metadata['traceback'] = quoteattr(' '.join(
-                        traceback.format_exception(*sys.exc_info())))
-                try:
-                    self.tearDown()
-                except KeyboardInterrupt:
-                    raise
-                except:
-                    result.addFailure(self, self.__exc_info())
-                    metadata['result'] = 'Error'
-                    metadata['traceback'] = quoteattr(' '.join(
-                        traceback.format_exception(*sys.exc_info())))
                     ok = False
+
+                self.tearDown()
+
                 if ok:
                     result.addSuccess(self)
-            finally:
-                self._log_result(t_start, time.time())
-                if not ok and self._stop_on_fail:
-                    result.stop()
-                result.stopTest(self)
+        except KeyboardInterrupt:
+            raise
+        except:
+            result.addFailure(self, self.__exc_info())
+            metadata['result'] = 'Error'
+            metadata['traceback'] = quoteattr(' '.join(
+                traceback.format_exception(*sys.exc_info())))
+
+        finally:
+            if not ok and self._stop_on_fail:
+                result.stop()
+            result.stopTest(self)
 
 
 

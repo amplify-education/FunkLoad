@@ -114,21 +114,16 @@ class FKLIMGSucker(IMGSucker):
                 # newattributes.append((name, path))
                 if not self.session.images.has_key(url):
                     self.ftestcase.logdd('    img: %s ...' % url)
-                    with self.ftestcase.record({'image': url}, rtype='image') as metadata:
+                    with self.ftestcase.record_response('image', url, None):
                         try:
                             self.session.images[url] = self.session.fetch(url)
                             self.session.history.append(('image', url))
-                            metadata['url'] = url
                         except HTTPError as error:
                             if self.ftestcase._accept_invalid_links:
                                 if not self.ftestcase.in_bench_mode:
                                     self.ftestcase.logd('  ' + str(error))
                             else:
-                                metadata['body'] = error.response.body
-                                metadata['headers'] = "\n".join(": ".join(header) for header in error.response.headers.items())
-                                metadata['result'] = 'Failure'
-                                raise self.ftestcase.failureException, str(error)
-
+                                raise
                     thread_sleep()      # give a chance to other threads
             else:
                 newattributes.append((name, value))
@@ -149,21 +144,16 @@ class FKLIMGSucker(IMGSucker):
                 # newattributes.append((name, path))
                 if not self.session.css.has_key(url):
                     self.ftestcase.logdd('    link: %s ...' % url)
-                    with self.ftestcase.record({'link': url}, rtype='link') as metadata:
+                    with self.ftestcase.record_response('link', url, None):
                         try:
                             self.session.css[url] = self.session.fetch(url)
                             self.session.history.append(('link', url))
-                            metadata['url'] = url
                         except HTTPError as error:
                             if self.ftestcase._accept_invalid_links:
                                 if not self.ftestcase.in_bench_mode:
                                     self.ftestcase.logd('  ' + str(error))
                             else:
-                                metadata['body'] = error.response.body
-                                metadata['headers'] = "\n".join(": ".join(header) for header in error.response.headers.items())
-                                metadata['result'] = 'Failure'
-                                raise self.ftestcase.failureException, str(error)
-
+                                raise
                     thread_sleep()      # give a chance to other threads
             else:
                 newattributes.append((name, value))
