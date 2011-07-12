@@ -25,9 +25,11 @@ anykey:anyvalue
 a multi line description in ReST will be displayed in the listing parts
 """
 import os
-from funkload.ReportRenderHtmlBase import RenderHtmlBase
-from funkload.ReportRenderHtmlGnuPlot import gnuplot
-from funkload.ReportRenderDiff import getRPath
+import hashlib
+from shutil import copyfile
+from funkload.utils import render_template
+from funkload.reports.extraction import extract_report_data
+from funkload.gnuplot import gnuplot, gnuplot_scriptpath, strictly_monotonic
 
 def extract(report_dir, startswith):
     """Extract line form the ReST index file."""
@@ -125,7 +127,7 @@ def get_metadata(metadata):
     return ', '.join(ret)
 
 
-class RenderTrend(RenderHtmlBase):
+class RenderTrend(object):
     """Trend report."""
     report_dir1 = None
     report_dir2 = None
@@ -135,69 +137,8 @@ class RenderTrend(RenderHtmlBase):
     output_dir = None
     script_file = None
 
-    def __init__(self, args, options, css_file=None):
-        # Swap windows path separator backslashes for forward slashes
-        # Windows accepts '/' but some file formats like rest treat the
-        # backslash specially.
-        self.args = [os.path.abspath(arg).replace('\\', '/') for arg in args]
-        self.options = options
-        self.css_file = css_file
 
-    def generateReportDirectory(self, output_dir):
-        """Generate a directory name for a report."""
-        output_dir = os.path.abspath(output_dir)
-        report_dir = os.path.join(output_dir, 'trend-report')
-        if not os.access(report_dir, os.W_OK):
-            os.mkdir(report_dir, 0775)
-        report_dir.replace('\\', '/')
-        return report_dir
 
-    def createCharts(self):
-        """Render stats."""
-        self.createGnuplotData()
-        self.createGnuplotScript()
-        gnuplot(self.script_file)
-
-    def createRstFile(self):
-        """Create the ReST file."""
-        rst_path = os.path.join(self.report_dir, 'index.rst')
-        lines = []
-        reports = self.args
-        reports_name = [os.path.basename(report) for report in reports]
-        reports_date = [extract_date(report) for report in reports]
-        self.reports_name = reports_name
-        reports_metadata = [extract_metadata(report) for report in reports]
-        self.reports_metadata = reports_metadata
-        reports_rpath = [getRPath(self.report_dir, 
-                                  os.path.join(report, 'index.html').replace(
-                    '\\', '/')) for report in reports]
-        self.max_cus = extract_max_cus(reports[0])
-        # TODO: handles case where reports_name are the same
-        lines.append(rst_title("FunkLoad_ trend report", level=0))
-        lines.append("")
-        lines.append(".. sectnum::    :depth: 2")
-        lines.append("")
-        lines.append(rst_title("Trends", level=2))
-        lines.append(" .. image:: trend_apdex.png")
-        lines.append(" .. image:: trend_spps.png")
-        lines.append(" .. image:: trend_avg.png")
-        lines.append("")
-        lines.append(rst_title("List of reports", level=1))
-        count = 0
-        for report in reports_name:
-            count += 1
-                         
-            lines.append(" * Bench **%d** %s: `%s <%s>`_ %s" % (
-                    count, reports_date[count - 1], report, 
-                    reports_rpath[count - 1], 
-                    get_metadata(reports_metadata[count - 1])))
-            lines.append("")
-        lines.append(" .. _FunkLoad: http://funkload.nuxeo.org/")
-        lines.append("")
-        f = open(rst_path, 'w')
-        f.write('\n'.join(lines))
-        f.close()
-        self.rst_path = rst_path
 
     def copyXmlResult(self):
         pass
@@ -205,87 +146,103 @@ class RenderTrend(RenderHtmlBase):
     def __repr__(self):
         return self.render()
 
-    def createGnuplotData(self):
-        """Render rst stat."""
-
-        def output_stat(tag, count):
-            header, stat = extract_stat(tag, rep)
-            text = []
-            for line in stat:
-                line.insert(0, str(count))
-                line.append(extract_date(rep))
-                text.append(' '.join(line))
-            return '\n'.join(text)
-
-        data_file = os.path.join(self.report_dir, 'trend.dat')
-        self.data_file = data_file
-        f = open(data_file, 'w')
-        count = 0
-        for rep in self.args:
-            count += 1
-            f.write(output_stat('Page', count) + '\n\n')
-        f.close()
-
-    def createGnuplotScript(self):
-        """Build gnuplot script"""
-        labels = []
-        count = 0
-        for metadata in self.reports_metadata:
-            count += 1
-            if metadata.get('label'):
-                labels.append('set label "%s" at %d,%d,1 rotate by 45 front' % (
-                        metadata.get('label'), count, int(self.max_cus) + 2))
-        labels = '\n'.join(labels)
-        script_file = os.path.join(self.report_dir, 'script.gplot')
-        self.script_file = script_file
-        f = open(script_file, 'w')
-        f.write('# ' + ' '.join(self.reports_name))
-        f.write('''# COMMON SETTINGS
-set grid  back
-set boxwidth 0.9 relative
-
-# Apdex
-set output "trend_apdex.png"
-set terminal png size 640,380
-set border 895 front linetype -1 linewidth 1.000
-set grid nopolar
-set grid xtics nomxtics ytics nomytics noztics nomztics \
- nox2tics nomx2tics noy2tics nomy2tics nocbtics nomcbtics
-set grid layerdefault  linetype 0 linewidth 1.000,  linetype 0 linewidth 1.000
-set style line 100  linetype 5 linewidth 0.10 pointtype 100 pointsize default
-#set view map
-unset surface
-set style data pm3d
-set style function pm3d
-set ticslevel 0
-set nomcbtics
-set xrange [ * : * ] noreverse nowriteback
-set yrange [ * : * ] noreverse nowriteback
-set zrange [ * : * ] noreverse nowriteback
-set cbrange [ * : * ] noreverse nowriteback
-set lmargin 0
-set pm3d at s scansforward
-# set pm3d scansforward interpolate 0,1
-set view map
-set title "Apdex Trend"
-set xlabel "Bench"
-set ylabel "CUs"
-%s
-splot "trend.dat" using 1:2:3 with linespoints
-unset label
-set view
-
-set output "trend_spps.png"
-set title "Pages per second Trend"
-splot "trend.dat" using 1:2:5 with linespoints
-
-set output "trend_avg.png"
-set palette negative
-set title "Average response time (s)"
-splot "trend.dat" using 1:2:11 with linespoints
-
-''' % labels)
-        f.close()
-
 class TrendReport(object):
-    pass
+    def __init__(self, args, options, css_file=None):
+        # Swap windows path separator backslashes for forward slashes
+        # Windows accepts '/' but some file formats like rest treat the
+        # backslash specially.
+        self.args = [os.path.abspath(arg).replace('\\', '/') for arg in args]
+        self.options = options
+        self.css_file = css_file
+        self.reports_metadata = [extract_metadata(report) for report in self.args]
+        self.reports_name = [os.path.basename(report) for report in self.args]
+        self.reports_data = [extract_report_data(os.path.join(report, 'index.rst')) for report in self.args]
+        
+        self.comparable_keys = None
+        for data in self.reports_data:
+            if self.comparable_keys is None:
+                self.comparable_keys = set(data.keys())
+            else:
+                self.comparable_keys = self.comparable_keys.intersection(set(data.keys()))
+
+    def generate_report_dir_name(self):
+        """Generate a directory name for a report."""
+        return 'trend-report'
+
+    def store_data_files(self, report_dir):
+        for idx, report in enumerate(self.args):
+            copyfile(
+                os.path.join(report, 'index.rst'),
+                os.path.join(report_dir, 'report_{idx}.rst'.format(idx=idx))
+            )
+
+    def render(self, output_format, image_paths={}):
+        """Create the ReST file."""
+        reports = self.args
+        reports_date = [extract_date(report) for report in reports]
+        self.max_cus = extract_max_cus(reports[0])
+        return render_template(
+            '{output_format}/trend.mako'.format(output_format=output_format),
+            reports=zip(self.reports_name, reports_date, self.reports_metadata),
+            comparable_keys=self.comparable_keys,
+            image_paths=image_paths,
+        )
+
+    def render_charts(self, report_dir):
+        """Render stats."""
+        images = {}
+        for key in sorted(self.comparable_keys):
+            per_second, response_times, apdex = self.create_trend_chart(key, report_dir)
+            images[(key, 'per_second')] = per_second
+            images[(key, 'average')] = response_times
+            images[(key, 'apdex')] = response_times
+        return images
+
+    def create_trend_chart(self, key, report_dir):
+        output_name = 'trend_{hash}'.format(hash=hashlib.md5(str(key)).hexdigest())
+        per_second_name = output_name + '.per_second.png'
+        average_response_name = output_name + '.average.png'
+        apdex_name = output_name + '.apdex.png'
+        per_second_path = gnuplot_scriptpath(report_dir, per_second_name)
+        average_response_path = gnuplot_scriptpath(report_dir, average_response_name)
+        apdex_path = gnuplot_scriptpath(report_dir, apdex_name)
+        gplot_path = str(os.path.join(report_dir, output_name + '.gplot'))
+        data_path = gnuplot_scriptpath(report_dir, output_name + '.data')
+
+        labels = ['CUs', 'PS', 'Apdex*', 'AVG']
+        data = []
+
+        cycles = [int(v) for v in self.reports_data[0][key]['CUs']]
+
+        for report_idx, report_data in enumerate(self.reports_data):
+            for idx in range(len(cycles)):
+                values = [report_idx]
+                for column_name in labels:
+                    values.append(report_data[key][column_name][idx])
+                data.append(values)
+            data.append(None)
+
+        with open(data_path, 'w') as data_file:
+            data_file.write(render_template(
+                'gnuplot/data.mako',
+                labels=labels,
+                data=data
+            ))
+
+        with open(gplot_path, 'w') as gplot_file:
+            gplot_file.write(render_template(
+                'gnuplot/trend.mako',
+                per_second_path=per_second_path,
+                average_response_path=average_response_path,
+                apdex_path=apdex_path,
+                use_xticlabels=strictly_monotonic(cycles),
+                data_path=data_path,
+                key=key,
+                column_names=labels,
+                reports_name=self.reports_name,
+                labels=[metadata.get('label') for metadata in self.reports_metadata],
+                max_cus=max(cycles),
+            ))
+        gnuplot(gplot_path)
+
+        return (per_second_name, average_response_name, apdex_name)

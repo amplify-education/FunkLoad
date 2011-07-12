@@ -61,6 +61,7 @@ import xml.parsers.expat
 from collections import defaultdict
 from optparse import OptionParser, TitledHelpFormatter
 from tempfile import NamedTemporaryFile
+from shutil import copyfile
 
 from ReportStats import StatsAccumulator, MonitorStat, ErrorStat
 from MergeResultFiles import MergeResultFiles
@@ -212,6 +213,7 @@ def generate_html_report(report_dir, css_file=None):
     """
     Generate an html report from the index.rst file in report_dir
     """
+
     # Copy the css
     if css_file is not None:
         css_dest_path = os.path.join(report_dir, css_file)
@@ -323,6 +325,9 @@ def main():
     if options.html:
         trace('Creating {type} ...\n'.format(type=report.__class__.__name__))
         report_dir = create_report_dir(options, report)
+        report.store_data_files(report_dir)
+
+
         image_paths = report.render_charts(report_dir)
         with open(os.path.join(report_dir, 'index.rst'), 'w') as index_rst:
             index_rst.write(report.render('rst', image_paths))

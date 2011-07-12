@@ -20,51 +20,11 @@
 $Id$
 """
 import os
-from docutils.core import publish_doctree
 from funkload.utils import render_template
 import hashlib
 from funkload.gnuplot import gnuplot, gnuplot_scriptpath, strictly_monotonic
-
-def extract_table(table):
-    column_names = [elem for elem in table.traverse() if elem.tagname == 'thead'][0][0]
-    # Extract all rows from the table except the header row
-    rows = [elem for elem in table.traverse() if elem.tagname == 'row'][1:]
-
-    columns = {}
-    for idx, column in enumerate(column_names):
-        columns[column.astext()] = [row[idx].astext() for row in rows]
-
-    return columns
-
-
-def index_by_CUs(table):
-    CUs = [int(cu) for cu in table['CUs']]
-    columns_by_cu = {}
-    for name, values in table.items():
-        columns_by_cu[name] = dict(zip(CUs, values))
-
-    return columns_by_cu
-
-
-def extract_report_data(report_path):
-    with open(report_path) as report:
-        doc = publish_doctree(''.join(report.readlines()))
-
-    # All stats tables are marked with a comment before-hand with the table
-    # title in it
-    stats_table_tag = 'stats_table '
-    stats_table_markers = [elem for elem in doc.traverse()
-        if (elem.tagname == 'comment' and
-            elem[0].astext().startswith(stats_table_tag))]
-
-    stats_tables = [extract_table(m.next_node(siblings=True, descend=False))
-        for m in stats_table_markers]
-
-    return dict(zip(
-        (e[0].astext()[len(stats_table_tag):] for e in stats_table_markers),
-        stats_tables
-    ))
-
+from shutil import copyfile
+from funkload.reports.extraction import extract_report_data
 
 def getReadableDiffReportName(a, b):
     """Return a readeable diff report name using 2 reports"""
@@ -104,26 +64,33 @@ class DiffReport(object):
         # Swap windows path separator backslashes for forward slashes
         # Windows accepts '/' but some file formats like rest treat the
         # backslash specially.
-        self.report_dir1 = os.path.abspath(report_dir1).replace('\\', '/')
-        self.report_dir2 = os.path.abspath(report_dir2).replace('\\', '/')
+        self.report1 = os.path.abspath(os.path.join(report_dir1, 'index.rst')).replace('\\', '/')
+        self.report2 = os.path.abspath(os.path.join(report_dir2, 'index.rst')).replace('\\', '/')
         self.options = options
         self.css_file = css_file
         self.header = None
-        self.data1 = extract_report_data(os.path.join(self.report_dir1, 'index.rst'))
-        self.data2 = extract_report_data(os.path.join(self.report_dir2, 'index.rst'))
+        self.data1 = extract_report_data(self.report1)
+        self.data2 = extract_report_data(self.report2)
         self.comparable_keys = set(self.data1.keys()) & set(self.data2.keys())
     
     def generate_report_dir_name(self):
         """Generate a directory name for a report."""
-        return getReadableDiffReportName(self.report_dir1, self.report_dir2)
+        return getReadableDiffReportName(
+            os.path.dirname(self.report1),
+            os.path.dirname(self.report2)
+        )
+
+    def store_data_files(self, report_dir):
+        copyfile(self.report1, os.path.join(report_dir, 'left.rst'))
+        copyfile(self.report2, os.path.join(report_dir, 'right.rst'))
 
     def render(self, output_format, image_paths={}):
         return render_template(
             '{output_format}/diff.mako'.format(output_format=output_format),
-            left_path=self.report_dir1,
-            left_name=os.path.basename(self.report_dir1),
-            right_path=self.report_dir2,
-            right_name=os.path.basename(self.report_dir2),
+            left_path=self.report1,
+            left_name=os.path.basename(os.path.dirname(self.report1)),
+            right_path=self.report2,
+            right_name=os.path.basename(os.path.dirname(self.report2)),
             comparable_keys=self.comparable_keys,
             left_keys=set(self.data1.keys()),
             right_keys=set(self.data2.keys()),
@@ -180,12 +147,12 @@ class DiffReport(object):
                 per_second_path=per_second_path,
                 response_times_path=response_times_path,
                 use_xticlabels=strictly_monotonic(cycles),
-                left_path=self.report_dir1,
-                right_path=self.report_dir2,
+                left_path=self.report1,
+                right_path=self.report2,
                 data_path=data_path,
                 key=key,
                 column_names=labels,
             ))
         gnuplot(gplot_path)
 
-        return (per_second_path, response_times_path)
+        return (per_second_name, response_times_name)

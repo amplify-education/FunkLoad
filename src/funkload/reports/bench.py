@@ -30,6 +30,7 @@ from funkload.MonitorPlugins import MonitorPlugins
 from funkload.MonitorPluginsDefault import MonitorCPU, MonitorMemFree, MonitorNetwork, MonitorCUs
 from funkload.utils import render_template
 from funkload.gnuplot import gnuplot, gnuplot_scriptpath, strictly_monotonic
+from shutil import copyfile
 
 class BenchReport(object):
     """
@@ -74,6 +75,9 @@ class BenchReport(object):
             report_dir_items = (config['id'], stamp, config.get('label'))
         return '-'.join(report_dir_items)
 
+    def store_data_files(self, report_dir):
+        xml_dest_path = os.path.join(report_dir, 'funkload.xml')
+        copyfile(self.options.xml_file, xml_dest_path)
 
     def render(self, output_format, image_paths={}):
         return render_template(
