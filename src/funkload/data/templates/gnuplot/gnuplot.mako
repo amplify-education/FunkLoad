@@ -1,10 +1,12 @@
-<%def name="columns(column_names, xaxis, *column_list, **options)">\
+<%def name="columns(xaxis, *column_list, **options)">\
 <%
+labels = options.get('column_names', column_names)
 def index(col):
-    return column_names.index(col) + 1
+    return labels.index(col) + 1
 
 xcol = index(xaxis)
 format = options.get('format')
+
 if format is not None:
     col_map = dict((name, index(name)) for name in column_list)
     columns = format.format(**col_map)

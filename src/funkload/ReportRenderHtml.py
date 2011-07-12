@@ -26,5 +26,3 @@ try:
 except ImportError:
     # 2/ no charts
     from ReportRenderHtmlBase import RenderHtmlBase as RenderHtml
-
-from ReportRenderHtmlGnuPlot import RenderHtmlGnuPlot as RenderHtml

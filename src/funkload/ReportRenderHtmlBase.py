@@ -37,55 +37,11 @@ class RenderHtmlBase(RenderRst):
         self.css_file = css_file
         self.report_dir = self.css_path = self.rst_path = self.html_path = None
 
-    def generateReportDirectory(self, output_dir):
-        """Generate a directory name for a report."""
-        config = self.config
-        stamp = config['time'][:19].replace(':', '')
-        stamp = stamp.replace('-', '')
-        if config.get('label', None) is None:
-            report_dir = os.path.join(output_dir, '%s-%s' % (
-                config['id'], stamp))
-        else:
-            report_dir = os.path.join(output_dir, '%s-%s-%s' % (
-                config['id'], stamp, config.get('label')))
-        return report_dir
-
-    def prepareReportDirectory(self):
-        """Create a report directory."""
-        if self.options.report_dir:
-            report_dir = os.path.abspath(self.options.report_dir)
-        else:
-            # init output dir
-            output_dir = os.path.abspath(self.options.output_dir)
-            if not os.access(output_dir, os.W_OK):
-                os.mkdir(output_dir, 0775)
-            # init report dir
-            report_dir = self.generateReportDirectory(output_dir)
-        if not os.access(report_dir, os.W_OK):
-            os.mkdir(report_dir, 0775)
-        self.report_dir = report_dir
-
     def createRstFile(self):
         """Create the ReST file."""
         self.rst_path = os.path.join(self.report_dir, 'index.rst')
         with open(self.rst_path, 'w') as f:
             f.write(unicode(self).encode("utf-8"))
-
-    def copyCss(self):
-        """Copy the css to the report dir."""
-        css_file = self.css_file
-        if css_file is not None:
-            css_dest_path = os.path.join(self.report_dir, css_file)
-            copyfile(css_file, css_dest_path)
-        else:
-            # use the one in our package_data
-            from pkg_resources import resource_string
-            css_content = resource_string('funkload', 'data/funkload.css')
-            css_dest_path = os.path.join(self.report_dir, 'funkload.css')
-            f = open(css_dest_path, 'w')
-            f.write(css_content)
-            f.close()
-        self.css_path = css_dest_path
 
     def copyXmlResult(self):
         """Make a copy of the xml result."""
@@ -122,29 +78,4 @@ class RenderHtmlBase(RenderRst):
     __call__ = render
 
 
-    # monitoring charts
-    def createMonitorCharts(self):
-        """Create all monitored server charts."""
-        if not self.monitor or not self.with_chart:
-            return
 
-        charts={}
-        for host in self.monitor.keys():
-            charts[host]=self.createMonitorChart(host)
-        return charts
-
-    def createResultCharts(self):
-        """ Create all aggregate and breakout results charts """
-        if not self.with_chart:
-            return
-
-        charts={}
-        for group_name, grouped_stats in self.stats.items():
-            for value, cycle_stats in grouped_stats.items():
-                key = group_name, value
-                charts[key] = self.createResultChart(key, cycle_stats)
-        
-        for group_name, aggregate_stats in self.aggr_stats.items():
-            charts[group_name] = self.createResultChart(group_name, aggregate_stats)
-        
-        return charts

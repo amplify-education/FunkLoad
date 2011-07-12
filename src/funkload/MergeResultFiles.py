@@ -108,32 +108,13 @@ class FunkLoadContentMergeParser:
 
     def parse(self, filename, node_id):
         self.node_id = node_id
-        try:
-            parser = xml.parsers.expat.ParserCreate()
-            parser.StartElementHandler = self.handleStartElement
-            parser.EndElementHandler = self.handleEndElement
-            parser.CharacterDataHandler = self.handleCharData
+        parser = xml.parsers.expat.ParserCreate()
+        parser.StartElementHandler = self.handleStartElement
+        parser.EndElementHandler = self.handleEndElement
+        parser.CharacterDataHandler = self.handleCharData
 
-            with open(filename) as xml_file:
-                parser.ParseFile(xml_file)
-        except xml.parsers.expat.ExpatError as msg:
-            if (self.current_element[-1]['name'] == 'funkload'
-                and str(msg).startswith('no element found')):
-                print "Missing </funkload> tag."
-            else:
-                print 'Error: invalid xml bench result file'
-                if len(self.current_element) <= 1 or (
-                    self.current_element[1]['name'] != 'funkload'):
-                    print """Note that you can generate a report only for a
-                    bench result done with fl-run-bench (and not on a test
-                    result done with fl-run-test)."""
-                else:
-                    print """You may need to remove non ascii char that comes
-                    from error pages catched during the bench. iconv
-                    or recode may help you."""
-                print 'Xml parser element stack: %s' % [
-                    x['name'] for x in self.current_element]
-                raise
+        with open(filename) as xml_file:
+            parser.ParseFile(xml_file)
 
     def handleStartElement(self, name, attrs):
         if name in self.skipped_elements:

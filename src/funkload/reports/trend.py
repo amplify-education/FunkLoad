@@ -25,9 +25,9 @@ anykey:anyvalue
 a multi line description in ReST will be displayed in the listing parts
 """
 import os
-from ReportRenderHtmlBase import RenderHtmlBase
-from ReportRenderHtmlGnuPlot import gnuplot
-from ReportRenderDiff import getRPath
+from funkload.ReportRenderHtmlBase import RenderHtmlBase
+from funkload.ReportRenderHtmlGnuPlot import gnuplot
+from funkload.ReportRenderDiff import getRPath
 
 def extract(report_dir, startswith):
     """Extract line form the ReST index file."""
@@ -287,3 +287,5 @@ splot "trend.dat" using 1:2:11 with linespoints
 ''' % labels)
         f.close()
 
+class TrendReport(object):
+    pass

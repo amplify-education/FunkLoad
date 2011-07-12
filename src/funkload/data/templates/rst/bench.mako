@@ -1,3 +1,5 @@
+<%namespace file="../rst.mako" name="rst"/>
+
 <%
 unique_errors = set()
 for substats in allstats.values():
@@ -5,29 +7,10 @@ for substats in allstats.values():
         for cycle in cycle_stats.values():
             unique_errors.update(cycle.error_details.keys())
 error_ids = dict((error, i) for (i, error) in enumerate(sorted(unique_errors)))
-%>
+%>\
 
-<%def name="literal_block()">
-::
-${'    ' + '\n    '.join(capture(caller.body).split('\n'))}
-</%def>
-
-<%def name="title(level=1)">
-<%
-    rst_level = ['=', '=', '-', '~', '^']
-    char = rst_level[level]
-    text = capture(caller.body).strip()
-    length = len(str(text))
-%>
-% if level == 0:
-${char*length}
-% endif
-${text}
-${char*length}
-</%def>
-
-<%def name="render_stats_table(column_names, stats)">
-<%! import itertools %>
+<%def name="render_stats_table(column_names, stats, table_name=None)">
+<%! import itertools %>\
 <% 
 def format_value(value):
     if isinstance(value, float):
@@ -43,12 +26,14 @@ stats = [[str(cycles[cycle])] + format_row(row.stats_list())
 
 columns = zip(*([column_names] + stats))
 column_widths = [max(len(v) for v in column) for column in columns]
-%>
-
+%>\
 <%def name="divider()">\
 ${' '.join('='*w for w in column_widths)}\
-</%def>
+</%def>\
+% if table_name:
+.. stats_table ${table_name}
 
+% endif
 ${divider()}
 % for column, width in zip(column_names, column_widths):
 ${column.center(width)} \
@@ -65,18 +50,17 @@ ${divider()}
 </%def>
 
 <%def name="render_stats(title, image_path, stats, level=1)">
-<%self:title level="${level}">${title}</%self:title>
+<%rst:title level="${level}">${title}</%rst:title>
 % if image_path in image_paths:
 .. image:: ${image_paths[image_path]}
 % endif
-
-${render_stats_table(stats_columns, stats)}
+${render_stats_table(stats_columns, stats, title)}
 
 % if sum(s.errors for s in stats.values()) > 0:
-<%self:title level="${level+1}">Errors</%self:title>
+<%rst:title level="${level+1}">Errors</%rst:title>
 % for cycle, cycle_stats in stats.items():
 % if cycle_stats.errors > 0:
-<%self:title level="${level+2}">Cycle ${cycle}</%self:title>
+<%rst:title level="${level+2}">Cycle ${cycle}</%rst:title>
 % for error, count in sorted(cycle_stats.error_details.items()):
 - error${error_ids[error]}_: ${count}
 % endfor
@@ -103,10 +87,10 @@ ${render_stats(stat_name, (aggregate_name, stat_name), stats, 2)}
 <%def name="error_details()">
 % for index, error in enumerate(sorted(unique_errors)):
 .. _error${index}:
-<%self:title level="${2}">Error ${index}</%self:title>
+<%rst:title level="${2}">Error ${index}</%rst:title>
 
 % if error.code >= 0:
-<%self:title level="${3}">Http Response</%self:title>
+<%rst:title level="${3}">Http Response</%rst:title>
 HTTP ${error.code}
 % for name, value in sorted(error.headers):
 ${name}: value
@@ -117,17 +101,17 @@ ${error.body}
 % endif
 
 % if error.traceback:
-<%self:title level="${3}">Traceback</%self:title>
-<%self:literal_block>
+<%rst:title level="${3}">Traceback</%rst:title>
+<%rst:literal_block>
 ${error.traceback}
-</%self:literal_block>
+</%rst:literal_block>
 % endif
 
 % endfor
 </%def>
 
 <%block name="header_display">
-<%self:title level="${0}">Funkload_ bench report</%self:title>
+<%rst:title level="${0}">Funkload_ bench report</%rst:title>
 
 :date: ${date}
 :abstract:
@@ -143,7 +127,7 @@ ${error.traceback}
 </%block>
 
 <%block name="config_display">
-<%self:title>Bench configuration</%self:title>
+<%rst:title>Bench configuration</%rst:title>
 * Launched: ${date}
 % if config.get('node'):
 * From: ${config['node']}
@@ -161,7 +145,7 @@ ${error.traceback}
 * Apdex: |APDEXT|
 * FunkLoad_ version: ${config['version']}
 
-<% metadata = dict((key[5:], value) for (key, value) in config.items() if key.startswith("meta:")) %>
+<% metadata = dict((key[5:], value) for (key, value) in config.items() if key.startswith("meta:")) %>\
 % if metadata:
 Bench metadata:
 % for key, value in metadata.items():
@@ -178,10 +162,10 @@ ${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
 % endfor
 
 % if monitor_charts:
-<%self:title>Monitored hosts</%self:title>
+<%rst:title>Monitored hosts</%rst:title>
 <%block name="monitors">
 % for host, charts in monitor_charts.items():
-<%self:title level="${2}">${host}: ${config.get(host, '')}</%self:title>
+<%rst:title level="${2}">${host}: ${config.get(host, '')}</%rst:title>
 % for chart_title, chart_image in charts:
 **${chart_title}**
 
@@ -192,11 +176,11 @@ ${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
 </%block>
 % endif
 
-<%self:title>Error Details</%self:title>
+<%rst:title>Error Details</%rst:title>
 ${error_details()}
 
 <%block name="definitions">
-<%self:title>Definitions</%self:title>
+<%rst:title>Definitions</%rst:title>
 * CUs: Concurrent users or number of concurrent threads executing tests.
 * Request: a single GET/POST/redirect/xmlrpc request.
 * Page: a request with redirects and resource links (image, css, js) for an html page.

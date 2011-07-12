@@ -63,14 +63,13 @@ from optparse import OptionParser, TitledHelpFormatter
 from tempfile import NamedTemporaryFile
 
 from ReportStats import StatsAccumulator, MonitorStat, ErrorStat
-from ReportRenderRst import RenderRst
-from ReportRenderHtml import RenderHtml
-from ReportRenderDiff import RenderDiff
-from ReportRenderTrend import RenderTrend
 from MergeResultFiles import MergeResultFiles
+from funkload.reports.bench import BenchReport
+from funkload.reports.diff import DiffReport
+from funkload.reports.trend import TrendReport
 from utils import trace, get_version
 from FunkLoadTestCase import RESPONSE_BY_STEP, RESPONSE_BY_DESCRIPTION, PAGE, TEST
-
+from docutils.core import publish_cmdline
 
 # ------------------------------------------------------------
 # Xml parser
@@ -209,6 +208,49 @@ class FunkLoadXmlParser:
         self.current_element[-1].setdefault('contents', []).append(data)
 
 
+def generate_html_report(report_dir, css_file=None):
+    """
+    Generate an html report from the index.rst file in report_dir
+    """
+    # Copy the css
+    if css_file is not None:
+        css_dest_path = os.path.join(report_dir, css_file)
+        copyfile(css_file, css_dest_path)
+    else:
+        # use the one in our package_data
+        from pkg_resources import resource_string
+        css_content = resource_string('funkload', 'data/funkload.css')
+        css_dest_path = os.path.join(report_dir, 'funkload.css')
+        with open(css_dest_path, 'w') as css:
+            css.write(css_content)
+
+    # Build the html
+    html_path = os.path.join(report_dir, 'index.html')
+    rst_path = os.path.join(report_dir, 'index.rst')
+    publish_cmdline(writer_name='html', argv=[
+        '-t',
+        '--stylesheet-path=' + css_dest_path,
+        rst_path,
+        html_path
+    ])
+
+    return html_path
+
+def create_report_dir(options, report):
+    if options.report_dir:
+        report_dir = os.path.abspath(options.report_dir)
+    else:
+        # init output dir
+        output_dir = os.path.abspath(options.output_dir)
+        if not os.access(output_dir, os.W_OK):
+            os.mkdir(output_dir, 0775)
+        # init report dir
+        report_dir = os.path.join(output_dir,
+            report.generate_report_dir_name())
+    if not os.access(report_dir, os.W_OK):
+        os.mkdir(report_dir, 0775)
+    return report_dir
+
 # ------------------------------------------------------------
 # main
 #
@@ -254,17 +296,11 @@ def main():
     if options.diffreport:
         if len(args) != 2:
             parser.error("incorrect number of arguments")
-        trace("Creating diff report ... ")
-        html_path = RenderDiff(args[0], args[1], options)
-        trace("done: \n")
-        trace("%s\n" % html_path)
+        report = DiffReport(args[0], args[1], options)
     elif options.trendreport:
         if len(args) < 2:
             parser.error("incorrect number of arguments")
-        trace("Creating trend report ... ")
-        html_path = RenderTrend(args, options)
-        trace("done: \n")
-        trace("%s\n" % html_path)
+        report = TrendReport(args, options)
     else:
         if len(args) < 1:
             parser.error("incorrect number of arguments")
@@ -279,22 +315,24 @@ def main():
         options.xml_file = args[0]
         xml_parser = FunkLoadXmlParser(options.apdex_t)
         xml_parser.parse(options.xml_file)
-        if options.html:
-            trace("Creating html report: ...")
-            html_path = RenderHtml(xml_parser.config, xml_parser.stats,
-                                   xml_parser.monitor,
-                                   xml_parser.monitorconfig, options)()
-            trace("done: \n")
-            trace(html_path + "\n")
-        elif options.org:
-            from ReportRenderOrg import RenderOrg
-            print unicode(RenderOrg(xml_parser.config, xml_parser.stats,
-                                xml_parser.monitor,
-                                xml_parser.monitorconfig, options)).encode("utf-8")
-        else:
-            print unicode(RenderRst(xml_parser.config, xml_parser.stats,
-                                xml_parser.monitor,
-                                xml_parser.monitorconfig, options)).encode("utf-8")
+        
+        report = BenchReport(xml_parser.config, xml_parser.stats,
+                             xml_parser.monitor,
+                             xml_parser.monitorconfig, options)
+
+    if options.html:
+        trace('Creating {type} ...\n'.format(type=report.__class__.__name__))
+        report_dir = create_report_dir(options, report)
+        image_paths = report.render_charts(report_dir)
+        with open(os.path.join(report_dir, 'index.rst'), 'w') as index_rst:
+            index_rst.write(report.render('rst', image_paths))
+        html_path = generate_html_report(report_dir)
+        trace('Wrote {output}.\n'.format(output=html_path))
+
+    elif options.org:
+        print unicode(report.render('org')).encode("utf-8")
+    else:
+        print unicode(report.render('rst')).encode("utf-8")
 
 
 if __name__ == '__main__':
