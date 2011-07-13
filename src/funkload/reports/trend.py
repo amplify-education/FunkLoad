@@ -90,61 +90,6 @@ def extract_metadata(report_dir):
             ret['misc'] = v + ' ' + value
     return ret
 
-def extract_stat(tag, report_dir):
-    """Extract stat from the ReST index file."""
-    lines = open(os.path.join(report_dir, "index.rst")).readlines()
-    try:
-        idx = lines.index("%s stats\n" % tag)
-    except ValueError:
-        print "ERROR tag %s not found in rst report %s" % (tag, report_dir)
-        return []
-    delim = 0
-    ret =  []
-    header = ""
-    for line in lines[idx:]:
-        if line.startswith(" ====="):
-            delim += 1
-            continue
-        if delim == 1:
-            header = line.strip().split()
-        if delim < 2:
-            continue
-        if delim == 3:
-            break
-        ret.append([x.replace("%","") for x in line.strip().split()])
-    return header, ret
-
-def get_metadata(metadata):
-    """Format metadata."""
-    ret = []
-    keys = metadata.keys()
-    keys.sort()
-    for key in keys:
-        if key not in ('label', 'misc'):
-            ret.append('%s: %s' % (key, metadata[key]))
-    if metadata.get('misc'):
-        ret.append(metadata['misc'])
-    return ', '.join(ret)
-
-
-class RenderTrend(object):
-    """Trend report."""
-    report_dir1 = None
-    report_dir2 = None
-    header = None
-    sep = ', '
-    data_file = None
-    output_dir = None
-    script_file = None
-
-
-
-
-    def copyXmlResult(self):
-        pass
-
-    def __repr__(self):
-        return self.render()
 
 class TrendReport(object):
     def __init__(self, args, options, css_file=None):

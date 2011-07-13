@@ -49,15 +49,6 @@ def getReadableDiffReportName(a, b):
     r = r.replace('__', '_')
     return "diff_" + r
 
-def getRPath(a, b):
-    """Return a relative path of b from a."""
-    a_path = a.split('/')
-    b_path = b.split('/')
-    for i in range(min(len(a_path), len(b_path))):
-        if a_path[i] != b_path[i]:
-            break
-    return '../' * len(a_path[i:]) + '/'.join(b_path[i:])
-
 
 class DiffReport(object):
     def __init__(self, report_dir1, report_dir2, options, css_file=None):
