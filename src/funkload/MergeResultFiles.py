@@ -17,11 +17,11 @@
 #
 """Merge FunkLoad result files to produce a report for distributed bench
 reports."""
-import os
 import xml.parsers.expat
-from xml.etree.ElementTree import Element, tostring, XML
+from xml.etree.ElementTree import Element, tostring
 from utils import trace
 from xml.sax.saxutils import quoteattr, escape
+import json
 
 class EndOfConfig(Exception):
     pass
@@ -88,10 +88,10 @@ class FunkLoadConfigXmlParser:
                     raise EndOfConfig
                 self.cycle_duration = attrs['value']
             elif attrs['key'] == 'cycles':
-                if self.cycles and attrs['value'] != self.cycles:
+                if self.cycles and json.loads(attrs['value']) != self.cycles:
                     trace('Skipping file %s with different cycles %s != %s' % (self.current_file, attrs['value'], self.cycles))
                     raise EndOfConfig
-                self.cycles = attrs['value']
+                self.cycles = json.loads(attrs['value'])
             elif attrs['key'] == 'node':
                 self.nodes[self.current_file] = attrs['value']
             elif attrs['key'] == 'stats_only':
@@ -164,9 +164,7 @@ class MergeResultFiles:
         node_count = len(xml_parser.files) - xml_parser.stats_files
 
         # compute cumulated cycles
-        node_cycles = [int(cycle.strip())
-                       for cycle in xml_parser.cycles[1:-1].split(', ')
-                       if cycle]
+        node_cycles = xml_parser.cycles
         cycles = map(lambda x: x * node_count, node_cycles)
 
         # If we don't have any node cycles, we'll assume that this doesn't hold
