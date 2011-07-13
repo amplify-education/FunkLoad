@@ -220,10 +220,16 @@ class StatsAggregator(object):
 
     @property
     def max(self):
+        if not self.substats:
+            return 0
+
         return max(s.max for s in self.substats)
     
     @property
     def min(self):
+        if not self.substats:
+            return 0
+
         return min(s.min for s in self.substats)
     
     @property
@@ -240,10 +246,16 @@ class StatsAggregator(object):
 
     @property
     def average(self):
+        if not self.substats:
+            return 0
+
         return self.total / len(self)
 
     @property
     def avg_per_second(self):
+        if not self.substats:
+            return 0
+
         return len(self) / self.substats[0].duration
 
     @property
@@ -264,6 +276,9 @@ class StatsAggregator(object):
 
     @property
     def max_per_second(self):
+        if not self.substats:
+            return 0
+
         return max(self.per_second.values())
 
     @property
@@ -275,6 +290,9 @@ class StatsAggregator(object):
 
     @property
     def apdex_score(self):
+        if len(self) == 0:
+            return 0
+
         return sum(s.apdex.raw_score for s in self.substats) / len(self)
 
     @property
@@ -306,12 +324,16 @@ class StatsAggregator(object):
         if int(step) != step:
             raise ValueError("Can only compute integer percentiles")
 
+        if not self.substats:
+            for perc in range(0, 100, step):
+                setattr(self, "perc%d" % perc, 0)
+
         percentile_names = defaultdict(list)
         entry_count = len(self)
         for perc in range(0, 100, step):
             index = int(perc / 100.0 * entry_count)
             percentile_names[index].append("perc%d" % perc)
-        
+
         for index, value in enumerate(self.ordered_values):
             if index in percentile_names:
                 for name in percentile_names[index]:
