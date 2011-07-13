@@ -180,7 +180,7 @@ class TrendReport(object):
                 per_second_path=per_second_path,
                 average_response_path=average_response_path,
                 apdex_path=apdex_path,
-                use_xticlabels=strictly_monotonic(cycles),
+                use_xticlabels=not strictly_monotonic(cycles),
                 data_path=data_path,
                 key=key,
                 column_names=labels,

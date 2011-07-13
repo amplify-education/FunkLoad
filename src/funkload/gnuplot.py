@@ -45,4 +45,5 @@ def strictly_monotonic(sequence):
     for fst, snd in zip(sequence, sequence[1:]):
         if snd <= fst:
             return False
+
     return True

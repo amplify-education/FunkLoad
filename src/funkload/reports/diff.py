@@ -137,7 +137,7 @@ class DiffReport(object):
                 'gnuplot/diff.mako',
                 per_second_path=per_second_path,
                 response_times_path=response_times_path,
-                use_xticlabels=strictly_monotonic(cycles),
+                use_xticlabels=not strictly_monotonic(cycles),
                 left_path=self.report1,
                 right_path=self.report2,
                 data_path=data_path,

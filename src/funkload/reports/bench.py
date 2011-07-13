@@ -147,7 +147,7 @@ class BenchReport(object):
                 chart_size=[800, 800],
                 maxCVUs=max(self.cycles),
                 datapoints=len(self.cycles),
-                use_xticlabels=strictly_monotonic(self.cycles),
+                use_xticlabels=not strictly_monotonic(self.cycles),
                 data_path=data_path,
                 has_error=has_error,
                 apdex_t="%0.1f" % apdex_t,
