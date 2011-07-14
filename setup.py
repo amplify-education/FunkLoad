@@ -71,6 +71,7 @@ setup(
                         'mako >= 0.4.1'],
     zip_safe=True,
     package_data={'funkload': ['data/templates/gnuplot/*', 'data/templates/rst/*',
+                               'data/templates/*',
                                'data/*.tpl', 'data/*.css',
                                'demo/simple/*', 'demo/zope/*',
                                'demo/cmf/*', 'demo/xmlrpc/*', 'demo/cps/*',
