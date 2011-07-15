@@ -161,12 +161,12 @@ Bench metadata:
 ${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
 % endfor
 
-% if monitor_charts:
+% if monitor_hosts:
 <%rst:title>Monitored hosts</%rst:title>
 <%block name="monitors">
-% for host, charts in monitor_charts.items():
+% for host in monitor_hosts:
 <%rst:title level="${2}">${host}: ${config.get(host, '')}</%rst:title>
-% for chart_title, chart_image in charts:
+% for chart_title, chart_image in image_paths[host]:
 **${chart_title}**
 
 .. image:: ${chart_image}

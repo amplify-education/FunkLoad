@@ -90,6 +90,7 @@ class BenchReport(object):
             config=self.config,
             date=self.date,
             apdex_t="%.1f" % self.options.apdex_t,
+            monitor_hosts=self.monitor,
         )
 
     def getMonitorConfig(self, host):
