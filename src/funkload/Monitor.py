@@ -26,27 +26,6 @@ from time import time, sleep
 from XmlRpcBase import XmlRpcBaseServer, XmlRpcBaseController
 from MonitorPlugins import MonitorPlugins
 
-# ------------------------------------------------------------
-# classes
-#
-class MonitorInfo(object):
-    """A simple class to collect info."""
-    def __init__(self, host, plugins):
-        self.time = time()
-        self.host = host
-        for plugin in (plugins.MONITORS.values()):
-            for key, value in plugin.getStat().items():
-                setattr(self, key, value)
-
-    def __repr__(self, extra_key=None):
-        text = "<monitor "
-        if extra_key is not None:
-            text += 'key="%s" ' % extra_key
-        for key, value in self.__dict__.items():
-            text += '%s="%s" ' % (key, value)
-        text += ' />'
-        return text
-
 
 # ------------------------------------------------------------
 # Server
@@ -78,7 +57,13 @@ class MonitorServer(XmlRpcBaseServer):
 
     def getRecord(self):
         """ Returns the Monitor info at this point in time """
-        return repr(MonitorInfo(self.host, self.plugins))
+        ret = {}
+        ret['time'] = time()
+        ret['host'] = self.host
+        for plugin in (self.plugins.MONITORS.values()):
+            for key, value in plugin.getStat().items():
+                ret[key] = str(value)
+        return ret
 
 # ------------------------------------------------------------
 # Controller

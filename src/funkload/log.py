@@ -5,22 +5,30 @@ from xml.sax.saxutils import XMLGenerator
 from funkload.utils import get_version
 from datetime import datetime
 
-results_loggers = {}
-
+loggers = {}
 
 def get_results_logger(path):
-    global results_loggers
-    if path in results_loggers:
-        return results_loggers[path]
+    global loggers
+    if path in loggers:
+        return loggers[path]
     else:
-        return results_loggers.setdefault(path, ResultsLogger(path))
+        return loggers.setdefault(path, ResultsLogger(path))
+
+def get_stats_logger(path):
+    global loggers
+    if path in loggers:
+        return loggers[path]
+    else:
+        return loggers.setdefault(path, StatsLogger(path))
+
+load_time = int(time.time())
 
 
 class XmlLogger(object):
     
     def __init__(self, path):
         if os.access(path, os.F_OK):
-            os.rename(path, path + '.bak-' + str(int(time.time())))
+            os.rename(path, path + '.bak-' + str(load_time))
         self.output = open(path, 'w')
         self.xml_gen = XMLGenerator(self.output, 'utf-8')
 
@@ -70,6 +78,36 @@ class ResultsLogger(object):
             for key, value in aggregates.items():
                 with self.xml_logger.element('aggregate', {'name': key}):
                     self.xml_logger.text(value)
+
+    def end_log(self):
+        self.xml_logger.end_log()
+
+
+class StatsLogger(object):
+    def __init__(self, path):
+        self.xml_logger = XmlLogger(path)
+
+    def start_log(self):
+        self.xml_logger.start_log('funkload', {
+            'version': get_version(),
+            'time': datetime.now().isoformat()
+        })
+
+    def config(self, key, value, ns=None):
+        if ns is not None:
+            key = ':'.join((ns, key))
+
+        with self.xml_logger.element('config', {'key': key, 'value': value}):
+            pass
+
+    def monitor_config(self, host, key, value):
+        with self.xml_logger.element('monitorconfig',
+                {'host': host, 'key': key, 'value': value}):
+            pass
+
+    def monitor(self, **data):
+        with self.xml_logger.element('monitor', data):
+            pass
 
     def end_log(self):
         self.xml_logger.end_log()

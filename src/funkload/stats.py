@@ -2,10 +2,10 @@ import os.path
 import threading
 from Queue import Queue, Empty
 from xmlrpclib import ServerProxy
-from utils import get_version, trace
-from datetime import datetime
+from utils import trace
 from xmlrpclib import Fault
 from socket import error as SocketError
+from funkload.log import get_stats_logger
 
 
 stats_queue = Queue()
@@ -15,47 +15,35 @@ class StatsWriterThread(threading.Thread):
 
     def __init__(self, output_filename, config={}):
         threading.Thread.__init__(self)
-        self.output_fd = open(output_filename, "w+")
+        self.logger = get_stats_logger(output_filename)
         self.shutdown_event = threading.Event()
         self._config = config
-
-    def write_header(self, config):
-        header = '<funkload version="{version}" time="{time}">\n'.format(
-                            version=get_version(), time=datetime.now().isoformat())
-        self.output_fd.write(header)
-        for key, value in config.items():
-            stat = '<config key="{key}" value="{value}"/>\n'.format(key=key,
-                                                                    value=value)
-            self.output_fd.write(stat)
-
-    def write_footer(self):
-        self.output_fd.write("</funkload>\n")
 
     def shutdown(self):
         self.shutdown_event.set()
 
     def run(self):
-        self.write_header(self._config)
+        self.logger.start_log()
+        for key, value in self._config.items():
+            self.logger.config(key, value)
+
         while 1:
             if self.shutdown_event.isSet():
                 break
 
             # Get the record from the queue...
             try:
-                record = stats_queue.get(timeout=2.0)
+                fn, args, kwargs = stats_queue.get(timeout=2.0)
             except Empty:
                 continue
 
-            record += "\n"
-
             # Write it out the stats file
-            self.output_fd.write(record)
+            getattr(self.logger, fn)(*args, **kwargs)
 
             # Its always important to let the queue know we finished a task!
             stats_queue.task_done()
 
-        self.write_footer()
-        self.output_fd.close()
+        self.logger.end_log()
 
 
 class StatsCollectionThread(threading.Thread):
@@ -73,10 +61,8 @@ class StatsCollectionThread(threading.Thread):
             trace("* Getting monitoring config from %s: ..." % self.host)
             config = self.server.getMonitorsConfig()
 
-            for key in config.keys():
-                xml = '<monitorconfig host="%s" key="%s" value="%s" />' % (
-                                                    self.host, key, config[key])
-                stats_queue.put(xml)
+            for key, value in config.items():
+                stats_queue.put(('monitor_config', [self.host, key, value], {}))
         except Fault:
             trace(' not supported.\n')
         except SocketError:
@@ -101,10 +87,10 @@ class StatsCollectionThread(threading.Thread):
 
             if self.monitor_key:
                 # Add the monitor key to what we get back from the monitor server
-                record = record.replace('/>', 'key="%s"/>' % self.monitor_key)
+                record['key'] = self.monitor_key
 
             # The deque is threadsafe, so append away
-            stats_queue.put(record)
+            stats_queue.put(('monitor', [], record))
 
             # Use the sleep event to wait on an interval
             self.shutdown_event.wait(self.interval)
