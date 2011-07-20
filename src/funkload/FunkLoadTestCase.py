@@ -28,17 +28,15 @@ import logging
 from warnings import warn
 from socket import error as SocketError
 from types import DictType, ListType, TupleType
-from datetime import datetime
 import unittest
 import traceback
 from random import random
 from urllib import urlencode
 from tempfile import mkdtemp
-from xml.sax.saxutils import quoteattr
 from urlparse import urljoin
 from ConfigParser import ConfigParser, NoSectionError, NoOptionError
 from contextlib import contextmanager
-from xml.etree.ElementTree import Element, SubElement, tostring
+from funkload.log import get_results_logger
 
 from webunit.webunittest import WebTestCase, HTTPError
 
@@ -149,9 +147,8 @@ class FunkLoadTestCase(unittest.TestCase):
             level = logging.DEBUG
         self.logger = get_default_logger(self.log_to, self.log_path,
                                          level=level)
-        self.logger_result = get_default_logger(log_to="xml",
-                                                log_path=self.result_path,
-                                                name="FunkLoadResult")
+        self.logger_results = get_results_logger(self.result_path)
+
         #self.logd('_funkload_init config [%s], log_to [%s],'
         #          ' log_path [%s], result [%s].' % (
         #    self._config_path, self.log_to, self.log_path, self.result_path))
@@ -685,32 +682,19 @@ class FunkLoadTestCase(unittest.TestCase):
         else:
             print self.meta_method_name+': '+message
 
-    def _logr(self, message, force=False):
-        """Log a result."""
-        if force or not self.in_bench_mode or recording():
-            self.logger_result.info(message)
-
     def _open_result_log(self, **kw):
         """Open the result log."""
-        self._logr('<funkload version="%s" time="%s">' % (
-                get_version(), datetime.now().isoformat()), force=True)
+        self.logger_results.start_log()
         self.addMetadata(ns=None, **kw)
 
     def addMetadata(self, ns="meta", **kw):
         """Add metadata info."""
-        xml = []
         for key, value in kw.items():
-            if ns is not None:
-                xml.append('<config key="%s:%s" value=%s />' % (
-                        ns, key, quoteattr(str(value))))
-            else:
-                xml.append('<config key="%s" value=%s />' % (
-                        key, quoteattr(str(value))))
-        self._logr('\n'.join(xml), force=True)
+            self.logger_results.config(key, value, ns)
 
     def _close_result_log(self):
         """Close the result log."""
-        self._logr('</funkload>', force=True)
+        self.logger_results.end_log()
 
     @contextmanager
     def record_response(self, rtype, url, description, **kwargs):
@@ -742,6 +726,8 @@ class FunkLoadTestCase(unittest.TestCase):
         info['thread_id'] = str(self.thread_id)
         info['suite_name'] = str(self.suite_name)
         info['test_name'] = str(self.test_name)
+        if self.in_bench_mode and not recording():
+            info['startup'] = True
         start_time = time.time()
         try:
             kwargs['result'] = 'Successful'
@@ -757,16 +743,7 @@ class FunkLoadTestCase(unittest.TestCase):
         finally:
             info['time'] = str(start_time)
             info['duration'] = str(time.time() - start_time)
-
-            message = Element('record', info)
-            for key, value in kwargs.items():
-                sub = SubElement(message, key)
-                sub.text = str(value)
-            for key, value in aggregates.items():
-                sub = SubElement(message, 'aggregate', name=key)
-                sub.text = str(value)
-            self._logr(tostring(message))
-
+            self.logger_results.record(info, kwargs, aggregates)
 
     def _dump_content(self, response):
         """Dump the html content in a file.
@@ -808,7 +785,6 @@ class FunkLoadTestCase(unittest.TestCase):
         """Run the test method.
 
         Override to log test result."""
-        t_start = time.time()
         if result is None:
             result = self.defaultTestResult()
         result.startTest(self)
@@ -841,8 +817,9 @@ class FunkLoadTestCase(unittest.TestCase):
         except:
             result.addFailure(self, self.__exc_info())
             metadata['result'] = 'Error'
-            metadata['traceback'] = quoteattr(' '.join(
-                traceback.format_exception(*sys.exc_info())))
+            metadata['traceback'] = ' '.join(
+                traceback.format_exception(*sys.exc_info()))
+            print metadata['traceback']
 
         finally:
             if not ok and self._stop_on_fail:
