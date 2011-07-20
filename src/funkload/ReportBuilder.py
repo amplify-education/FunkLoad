@@ -77,9 +77,10 @@ from docutils.core import publish_cmdline
 #
 class FunkLoadXmlParser:
     """Parse a funkload xml results."""
-    def __init__(self, apdex_t):
+    def __init__(self, apdex_t, measure_startup):
         """Init setup expat handlers."""
         self.apdex_t = apdex_t
+        self.measure_startup = measure_startup
         parser = xml.parsers.expat.ParserCreate()
         parser.buffer_text = True
         parser.CharacterDataHandler = self.handleCharacterData
@@ -192,6 +193,8 @@ class FunkLoadXmlParser:
 
             # Handle new-style results files
             if name == 'record':
+                if not self.measure_startup and attrs.get('startup', False) == 'True':
+                    return
                 for key, value in attrs.get('aggregates', []):
                     add_record(key, value)
             # Handle old-style results files
@@ -293,6 +296,9 @@ def main():
                       help="Apdex T constant in second, default is set to 1.5s. "
                       "Visit http://www.apdex.org/ for more information.",
                       default=1.5)
+    parser.add_option('-s', '--measure-startup', action='store_true',
+                      help='Include records that occurred during the startup period '
+                      'during report building', default=False)
 
     options, args = parser.parse_args()
     if options.diffreport:
@@ -315,7 +321,7 @@ def main():
             trace("Results merged in tmp file: %s\n" % os.path.abspath(tmp_file))
             args = [tmp_file]
         options.xml_file = args[0]
-        xml_parser = FunkLoadXmlParser(options.apdex_t)
+        xml_parser = FunkLoadXmlParser(options.apdex_t, options.measure_startup)
         xml_parser.parse(options.xml_file)
         
         report = BenchReport(xml_parser.config, xml_parser.stats,
