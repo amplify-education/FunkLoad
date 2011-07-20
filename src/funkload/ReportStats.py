@@ -24,14 +24,33 @@ from heapq import heappop, heappush, heapify
 from collections import defaultdict
 
 class ErrorStat(object):
-    """Collect Error or Failure stats."""
-    def __init__(self, result, code, traceback, headers={}, body=None):
+    """
+    Collect Error or Failure stats.
+    
+    `result`: string
+        The result of the record block
+
+    `code`:
+        The return code of the error (assuming that the error was an http exception)
+
+    `traceback`:
+        The formatted stack trace of the exception
+
+    `headers`:
+        A string containing all of the HTTP headers returned by the error (if
+        this was an http exception)
+
+    `body`:
+        The http body of the error (assuming this was an http exception)
+
+    """
+    def __init__(self, result, code, traceback, headers=None, body=None):
         self._result = result
         try:
             self._code = int(code)
         except TypeError:
             self._code = None
-        self._headers = tuple(headers.items()) if headers else ()
+        self._headers = headers
         self._body = body or None
         self._traceback = traceback
 
@@ -45,7 +64,7 @@ class ErrorStat(object):
 
     @property
     def headers(self):
-        return dict(self._headers)
+        return self._headers
 
     @property
     def body(self):

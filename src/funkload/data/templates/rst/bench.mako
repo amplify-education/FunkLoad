@@ -92,9 +92,9 @@ ${render_stats(stat_name, (aggregate_name, stat_name), stats, 2)}
 % if error.code >= 0:
 <%rst:title level="${3}">Http Response</%rst:title>
 HTTP ${error.code}
-% for name, value in sorted(error.headers):
-${name}: value
-% endfor
+% if error.headers:
+${error.headers}
+% endif
 % if error.body:
 ${error.body}
 % endif
