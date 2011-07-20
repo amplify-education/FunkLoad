@@ -50,9 +50,9 @@ class BenchReport(object):
         self.aggr_stats = {}
         for aggr_key, aggr_stats in self.stats.items():
 
-            for cycle in range(len(self.cycles)):
-                self.aggr_stats.setdefault(aggr_key, {})[cycle] = StatsAggregator([
-                    cycle_stats[cycle] for cycle_stats in aggr_stats.values() if cycle in cycle_stats
+            for cycle_idx in range(len(self.cycles)):
+                self.aggr_stats.setdefault(aggr_key, {})[cycle_idx] = StatsAggregator([
+                    cycle_stats[cycle_idx] for cycle_stats in aggr_stats.values() if cycle_idx in cycle_stats
                 ])
 
         if options.html:
