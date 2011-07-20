@@ -35,8 +35,23 @@ from shutil import copyfile
 class BenchReport(object):
     """
     A report concerning a single bench test
+
+    `config`: dict
+        The config dictionary for this bench test
+
+    `stats`:
+        Nested dictionaries mapping aggregate keys -> aggregate values -> cycles -> stats
+
+    `monitor`: dict
+        A dictionary mapping host names to monitoring data for that host
+
+    `monitorconfig`: dict
+        A dictionary containing monitor config data
+
+    `options`:
+        An options object (as returned by optparse)
     """
-    def __init__(self, config, stats, monitor, monitorconfig, options, css_file=None):
+    def __init__(self, config, stats, monitor, monitorconfig, options):
         self.config = config
         self.stats = stats
         self.monitor = monitor
@@ -61,8 +76,6 @@ class BenchReport(object):
             self.with_chart = False
 
         self.date = config['time'][:19].replace('T', ' ')
-        self.css_file = css_file
-        self.css_path = self.rst_path = self.html_path = None
 
     def generate_report_dir_name(self):
         """Generate a directory name for a report."""
@@ -76,10 +89,22 @@ class BenchReport(object):
         return '-'.join(report_dir_items)
 
     def store_data_files(self, report_dir):
+        """
+        Copy all data files needed to recreate this report to the report_dir
+        """
         xml_dest_path = os.path.join(report_dir, 'funkload.xml')
         copyfile(self.options.xml_file, xml_dest_path)
 
     def render(self, output_format, image_paths={}):
+        """
+        Return the content of this bench report
+        
+        `output_format`: string
+            The output format to render this report in
+        
+        `image_paths`: dict
+            A dictionary mapping image keys to their paths on disk
+        """
         return render_template(
             '{output_format}/bench.mako'.format(output_format=output_format),
             cycles = self.cycles,
@@ -103,6 +128,20 @@ class BenchReport(object):
                  'MonitorCUs': MonitorCUs().getConfig() }
 
     def createResultChart(self, key, stats, report_dir):
+        """
+        Create a single result chart using a specified key and report directory
+
+        `key`:
+            The key used to identify this result. Is hashed to generate a filename
+
+        `stats`:
+            A StatsAccumulator or StatsAggregator to generate the chart from
+
+        `report_dir`:
+            The directory to write the data, gnuplot, and image files
+        
+        Returns the relative path of the generated image in the report_dir
+        """
         output_name = 'results_{hash}'.format(hash=hashlib.md5(str(key)).hexdigest())
         image_name = output_name + '.png'
         image_path = gnuplot_scriptpath(report_dir, image_name)

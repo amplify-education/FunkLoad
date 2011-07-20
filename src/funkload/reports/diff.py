@@ -51,14 +51,21 @@ def getReadableDiffReportName(a, b):
 
 
 class DiffReport(object):
-    def __init__(self, report_dir1, report_dir2, options, css_file=None):
+    """
+    Create a report comparing two funkload runs
+
+    `report_dir1`:
+        The path to the first report to compare
+
+    `report_dir2`:
+        The path to the second report to compare
+    """
+    def __init__(self, report_dir1, report_dir2):
         # Swap windows path separator backslashes for forward slashes
         # Windows accepts '/' but some file formats like rest treat the
         # backslash specially.
         self.report1 = os.path.abspath(os.path.join(report_dir1, 'index.rst')).replace('\\', '/')
         self.report2 = os.path.abspath(os.path.join(report_dir2, 'index.rst')).replace('\\', '/')
-        self.options = options
-        self.css_file = css_file
         self.header = None
         self.data1 = extract_report_data(self.report1)
         self.data2 = extract_report_data(self.report2)
@@ -72,10 +79,22 @@ class DiffReport(object):
         )
 
     def store_data_files(self, report_dir):
+        """
+        Copy the data required for this report to the report_dir
+        """
         copyfile(self.report1, os.path.join(report_dir, 'left.rst'))
         copyfile(self.report2, os.path.join(report_dir, 'right.rst'))
 
     def render(self, output_format, image_paths={}):
+        """
+        Create the report in the specified output format
+
+        `output_format`:
+            The output format of the report (currently, can be rst or org)
+
+        `image_paths`: dict
+            A dictionary mapping image keys to their paths on disk
+        """
         return render_template(
             '{output_format}/diff.mako'.format(output_format=output_format),
             left_path=self.report1,
@@ -98,6 +117,16 @@ class DiffReport(object):
         return images
 
     def create_diff_chart(self, key, report_dir):
+        """
+        Generate the diff chart for the specified key, comparing the
+        two reports for this diff.
+
+        `key`:
+            A section key that appears in both reports
+
+        `report_dir`:
+            The directory to write the data, gnuplot, and image files
+        """
         output_name = 'diff_{hash}'.format(hash=hashlib.md5(str(key)).hexdigest())
         per_second_name = output_name + '.per_second.png'
         response_times_name = output_name + '.response.png'

@@ -304,11 +304,11 @@ def main():
     if options.diffreport:
         if len(args) != 2:
             parser.error("incorrect number of arguments")
-        report = DiffReport(args[0], args[1], options)
+        report = DiffReport(args[0], args[1])
     elif options.trendreport:
         if len(args) < 2:
             parser.error("incorrect number of arguments")
-        report = TrendReport(args, options)
+        report = TrendReport(args)
     else:
         if len(args) < 1:
             parser.error("incorrect number of arguments")

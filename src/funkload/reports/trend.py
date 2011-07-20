@@ -92,13 +92,17 @@ def extract_metadata(report_dir):
 
 
 class TrendReport(object):
-    def __init__(self, args, options, css_file=None):
+    """
+    Build a trend report comparing a sequence of funkload benchmarks
+
+    `args`:
+        A list of directories containing the reports to compare
+    """
+    def __init__(self, args):
         # Swap windows path separator backslashes for forward slashes
         # Windows accepts '/' but some file formats like rest treat the
         # backslash specially.
         self.args = [os.path.abspath(arg).replace('\\', '/') for arg in args]
-        self.options = options
-        self.css_file = css_file
         self.reports_metadata = [extract_metadata(report) for report in self.args]
         self.reports_name = [os.path.basename(report) for report in self.args]
         self.reports_data = [extract_report_data(os.path.join(report, 'index.rst')) for report in self.args]
@@ -115,6 +119,12 @@ class TrendReport(object):
         return 'trend-report'
 
     def store_data_files(self, report_dir):
+        """
+        Store the data files required to generate this report in `report_dir`
+
+        `report_dir`:
+            The directory to create the report in
+        """
         for idx, report in enumerate(self.args):
             copyfile(
                 os.path.join(report, 'index.rst'),
@@ -122,7 +132,15 @@ class TrendReport(object):
             )
 
     def render(self, output_format, image_paths={}):
-        """Create the ReST file."""
+        """
+        Create the report in the specified output format
+
+        `output_format`:
+            The output format of the report (currently, can be rst or org)
+
+        `image_paths`: dict
+            A dictionary mapping image keys to their paths on disk
+        """
         reports = self.args
         reports_date = [extract_date(report) for report in reports]
         self.max_cus = extract_max_cus(reports[0])
@@ -144,6 +162,19 @@ class TrendReport(object):
         return images
 
     def create_trend_chart(self, key, report_dir):
+        """
+        Create a chart showing data trends for the specified key across all stored reports.
+
+        Returns a tuple with of 3 image paths, relative to the report dir:
+        (entries per second, average response time, apdex score)
+
+        `key`:
+            A section key that exists in self.reports_data, that specifies the data to trend
+            over
+
+        `report_dir`:
+            The path to the output directory to write the data, gnuplot, and images to
+        """
         output_name = 'trend_{hash}'.format(hash=hashlib.md5(str(key)).hexdigest())
         per_second_name = output_name + '.per_second.png'
         average_response_name = output_name + '.average.png'
