@@ -111,6 +111,13 @@ class StatsAccumulator(object):
     """
     Collect stats in as minimal a form as possible that will still allow the
     computation of various summary statistics
+
+    `duration`: float
+        The duration in seconds of the measured period (used for calculating
+        per second rates)
+
+    `apdex_t`: float
+        The apdex threshold in seconds used for calculating apdex score
     """
 
     def __init__(self, duration, apdex_t=1.5):
@@ -127,6 +134,16 @@ class StatsAccumulator(object):
     def add_record(self, time, value, error=None):
         """
         Add an entry to this stats collection
+
+        `time`: float
+            The time at which this entry was recorded, as an extended unix timestamp
+            (can include fractional seconds)
+
+        `value`: float
+            The duration of the entry, in seconds
+
+        `error`: boolean
+            Whether this entry was an error or not
         """
         self.values.append(value)
         self.min = min(self.min, value)
@@ -146,23 +163,38 @@ class StatsAccumulator(object):
         self._sorted = False
 
     def __len__(self):
+        """
+        Return the number of entries recorded
+        """
         return len(self.values)
 
     def sort(self):
+        """
+        Sorted the stored entries by duration
+        """
         if not self._sorted:
             self.values.sort()
             self._sorted = True
 
     @property
     def avg_per_second(self):
+        """
+        The average number of entries recorded per second
+        """
         return len(self)/self.duration
 
     @property
     def max_per_second(self):
+        """
+        The maximimum number of entries recorded in any second
+        """
         return max(self.per_second.values())
 
     @property
     def min_per_second(self):
+        """
+        The minimum number of entries recorded in any second
+        """
         if self.avg_per_second < 1:
             return 0
 
@@ -170,6 +202,10 @@ class StatsAccumulator(object):
 
     @property
     def ordered_values(self):
+        """
+        Yields all of the recorded durations stored in this collection of stats,
+        in ascending order
+        """
         self.sort()
 
         for v in self.values:
@@ -177,10 +213,16 @@ class StatsAccumulator(object):
 
     @property
     def apdex_score(self):
+        """
+        The apdex score for this collection of stats
+        """
         return self.apdex.score
 
     @property
     def average(self):
+        """
+        The average duration of recorded entries
+        """
         return self.total / len(self)
 
     def compute_percentiles(self, step):
@@ -202,6 +244,25 @@ class StatsAccumulator(object):
             setattr(self, "perc%d" % perc, value)
 
     def stats_list(self):
+        """
+        Returns a list of stats for this collection. The list contains the
+        following entries:
+
+        Apdex score
+        Apdex label
+        Average per second rate
+        Max per second rate
+        Number of entries recorded
+        Number of successful entries
+        Number of error entries
+        Minimum entry duration
+        Average entry duration
+        Maximum entry duration
+        10th Percentile entry duration
+        Median entry duration
+        90th Percentile entry duration
+        95th Percentile entry duration
+        """
         self.compute_percentiles(5)
         apdex_score = self.apdex_score
         return [apdex_score, get_apdex_label(apdex_score),
@@ -213,6 +274,9 @@ class StatsAccumulator(object):
 class StatsAggregator(object):
     """
     Aggregates the stats from multiple StatsAccumulators and StatsAggregators
+
+    `substats`:
+        A list of StatsAccumulator or StatsAggregator objects to aggregate over
     """
 
     def __init__(self, substats):
@@ -220,6 +284,10 @@ class StatsAggregator(object):
 
     @property
     def max(self):
+        """
+        The maximum entry from all the aggregated substats, or 0 if there are no
+        substats
+        """
         if not self.substats:
             return 0
 
@@ -227,6 +295,10 @@ class StatsAggregator(object):
     
     @property
     def min(self):
+        """
+        The minimum entry from all the aggregated substats, or 0 if there are no
+        substats
+        """
         if not self.substats:
             return 0
 
@@ -234,18 +306,30 @@ class StatsAggregator(object):
     
     @property
     def errors(self):
+        """
+        The number of error entries in all of the substats
+        """
         return sum(s.errors for s in self.substats)
     
     @property
     def successes(self):
+        """
+        The number of successful entries in all of the substats
+        """
         return sum(s.successes for s in self.substats)
 
     @property
     def total(self):
+        """
+        The total duration of all entries in all of the substats
+        """
         return sum(s.total for s in self.substats)
 
     @property
     def average(self):
+        """
+        The average duration of all entries in all of the substats
+        """
         if not self.substats:
             return 0
 
@@ -253,6 +337,9 @@ class StatsAggregator(object):
 
     @property
     def avg_per_second(self):
+        """
+        The average number of entries per second across all substats
+        """
         if not self.substats:
             return 0
 
@@ -260,6 +347,9 @@ class StatsAggregator(object):
 
     @property
     def error_details(self):
+        """
+        A dictionary mapping error types to counts
+        """
         error_details = defaultdict(int)
         for stat in self.substats:
             for error, count in stat.error_details.items():
@@ -268,6 +358,10 @@ class StatsAggregator(object):
 
     @property
     def per_second(self):
+        """
+        A dictionary mapping integer seconds to the number of entries
+        recorded in that second, over all substats
+        """
         per_second = defaultdict(int)
         for stat in self.substats:
             for sec, count in stat.per_second.items():
@@ -276,6 +370,9 @@ class StatsAggregator(object):
 
     @property
     def max_per_second(self):
+        """
+        The maximum rate of entries per second
+        """
         if not self.substats:
             return 0
 
@@ -283,6 +380,9 @@ class StatsAggregator(object):
 
     @property
     def min_per_second(self):
+        """
+        The minimum number of entries per second
+        """
         if self.avg_per_second < 1:
             return 0
 
@@ -290,6 +390,9 @@ class StatsAggregator(object):
 
     @property
     def apdex_score(self):
+        """
+        The apdex score, computed over all substats
+        """
         if len(self) == 0:
             return 0
 
@@ -297,6 +400,9 @@ class StatsAggregator(object):
 
     @property
     def ordered_values(self):
+        """
+        Yields the ordered set of values from all of the substats
+        """
         subvalues = [s.ordered_values for s in self.substats]
         next_values = [(next(s), s) for s in subvalues]
         heapify(next_values)
@@ -312,6 +418,9 @@ class StatsAggregator(object):
                 pass
     
     def __len__(self):
+        """
+        The number of entries in all substats
+        """
         return sum(len(s) for s in self.substats)
 
     def compute_percentiles(self, step):
@@ -340,6 +449,25 @@ class StatsAggregator(object):
                     setattr(self, name, value)
 
     def stats_list(self):
+        """
+        Returns a list of stats for this collection. The list contains the
+        following entries:
+
+        Apdex score
+        Apdex label
+        Average per second rate
+        Max per second rate
+        Number of entries recorded
+        Number of successful entries
+        Number of error entries
+        Minimum entry duration
+        Average entry duration
+        Maximum entry duration
+        10th Percentile entry duration
+        Median entry duration
+        90th Percentile entry duration
+        95th Percentile entry duration
+        """
         self.compute_percentiles(5)
         apdex_score = self.apdex_score
         return [apdex_score, get_apdex_label(apdex_score),
@@ -352,6 +480,9 @@ STATS_COLUMNS = ['CUs', 'Apdex*', 'Rating', 'PS', 'maxPS', 'TOTAL', 'SUCCESS',
 
 
 def get_apdex_label(score):
+    """
+    Returns a label for the apdex score
+    """
     if score < 0.5:
         return "UNACCEPTABLE"
     if score < 0.7:

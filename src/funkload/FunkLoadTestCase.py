@@ -697,7 +697,39 @@ class FunkLoadTestCase(unittest.TestCase):
         self.logger_results.end_log()
 
     @contextmanager
-    def record_response(self, rtype, url, description, **kwargs):
+    def record_response(self, rtype, url, description, **attrs):
+        """
+        A context manager that :py:func:`record`s  an http request to the
+        specified url. In the case of an HTTPError, the `body`, `headers`,
+        `result`, and `response_code` are stored in the record metadata, and
+        the exception is re-raised.
+
+        Each request is aggregated under the headings 'Response by step' and
+        'Response by description'. The former uses the current request step
+        and number to separated the responses, and the latter uses the supplied
+        description.
+
+        In this context, a new `step` is started for each top level HTTP operation
+        initiated by the test, and by xmlrpc calls
+
+        `rtype`:
+            The http request type (for example: get, post, xmlrpc)
+            
+            Stored as `rtype` in the logged record
+
+        `url`:
+            The url to which this request is being made
+
+            Stored as `url` in the logged record
+
+        `description`:
+            The description of this request
+
+            Stored as `description` in the logged record
+
+        `attrs`:
+            Any additional named attributes to be stored on the logged record
+        """
         step = self.steps
         number = self.page_responses
         with self.record({'Response by step': RESPONSE_BY_STEP.format(
@@ -705,7 +737,7 @@ class FunkLoadTestCase(unittest.TestCase):
                           'Response by description': RESPONSE_BY_DESCRIPTION.format(
                               type=rtype, url=url, description=description)},
                           url=url, rtype=rtype, description=description,
-                           **kwargs) as metadata:
+                           **attrs) as metadata:
             try:
                 self.page_responses += 1
                 yield metadata
@@ -719,7 +751,41 @@ class FunkLoadTestCase(unittest.TestCase):
                 raise SocketError("Can't load %s." % url)
 
     @contextmanager
-    def record(self, aggregates, **kwargs):
+    def record(self, aggregates, **metadata):
+        """
+        A context manager that logs a timing record to the results logger.
+
+        This record contains the cycle, cvus, thread_id, test suite_name,
+        test_name, time, and duration of the contained block of code.
+
+        If the bench is currently in startup mode (not all threads have
+        begun executing), then this record will be marked with startup=True,
+        and ignored by the default report builder.
+
+        The contextmanager returns the `metadata` dictionary, and when recording
+        the record, writes all contents of the `metadata` dictionary as children
+        of the record element. The only `metadata` keys used by the report builder
+        are 'result' and 'traceback'. If 'result' != 'Successful', the report builder
+        considers that record to have failed. 'result' defaults to 'Successful' but
+        can be changed by the test contents.
+        
+        If the executed code block raises an exception, 'result' is set to 'Error'
+        and 'traceback' is set to the formatted exception traceback of the raised
+        exception. The exception is then re-raised.
+
+        `aggregates`: dict
+            This is a dictionary mapping top level aggregation keys to their values.
+            The top level keys will be used to create sections in the built report,
+            and the value will be used to create subsections. The sections will
+            report stats for all records with that aggregate key, and the subsections
+            will report stats for all records with the aggregate value.
+
+        `**metadata`:
+            Any named arguments to record will be stored as children of the record
+            element in the results log xml
+
+        
+        """
         info = {}
         info['cycle'] = str(self.cycle)
         info['cvus'] = str(self.cvus)
@@ -730,20 +796,20 @@ class FunkLoadTestCase(unittest.TestCase):
             info['startup'] = True
         start_time = time.time()
         try:
-            kwargs['result'] = 'Successful'
-            yield kwargs
+            metadata['result'] = 'Successful'
+            yield metadata
 
         except KeyboardInterrupt:
             raise
         except:
-            kwargs['result'] = 'Error'
-            kwargs['traceback'] = ' '.join(
+            metadata['result'] = 'Error'
+            metadata['traceback'] = ' '.join(
                 traceback.format_exception(*sys.exc_info()))
             raise
         finally:
             info['time'] = str(start_time)
             info['duration'] = str(time.time() - start_time)
-            self.logger_results.record(info, kwargs, aggregates)
+            self.logger_results.record(info, metadata, aggregates)
 
     def _dump_content(self, response):
         """Dump the html content in a file.
