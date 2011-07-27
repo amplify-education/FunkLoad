@@ -203,6 +203,10 @@ class LoopTestRunner(threading.Thread):
                         trace("ERROR %s: %s" % (str(test), str(error)))
                     for (test, error) in test_result.failures:
                         trace("FAILURE %s: %s" % (str(test), str(error)))
+
+            if test_result.shouldStop:
+                break
+
             thread_sleep(self.sleep_time)
 
 
@@ -620,6 +624,10 @@ def main():
                       help="Additional packages to be passed to easy_install "
                            "on remote machines when being run in distributed "
                            "mode.")
+    parser.add_option("--stop-on-failure",
+                      action="store_true",
+                      dest="stop_on_fail",
+                      help="Stop execution of this bench on the first test failure")
 
     options, args = parser.parse_args()
     # XXX What exactly is this checking for here??
