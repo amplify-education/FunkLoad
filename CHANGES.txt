@@ -17,13 +17,29 @@ FunkLoad GIT master
 
 :git: https://github.com/nuxeo/FunkLoad
 
-:Target: 1.16.0
+:Target: 1.16.1
+
+Bug Fixes
+~~~~~~~~~~
+
+* Distributed mode (GH-23, GH-24, GH-25)
+
+
+FunkLoad 1.16.0
+------------------
+
+:Package: http://pypi.python.org/packages/source/f/funkload/funkload-1.16.0.tar.gz
+
+:github: https://github.com/nuxeo/FunkLoad/tree/1.16.0
+
+:Released date: 2011-07-21
+
 
 New Features
 ~~~~~~~~~~~~~~
 
 * New monitoring plugins contribution from Krzysztof A. Adamski. You
-  can add extend the monitoring by adding new plugins checkout the
+  can extend the monitoring by adding new plugins checkout the
   `Munin
   <https://github.com/nuxeo/FunkLoad/tree/master/contrib/FunkloadMunin>`_
   and `Nagios
@@ -74,6 +90,8 @@ New Features
 
 Bug fixes
 ~~~~~~~~~~~
+
+* Fix org-mode output for Org 7.5, adding missing monitoring section. 
 
 * GH-14: Fix report creation when having error message with non-us characters.
   Patch from Krzysztof A. Adamski.

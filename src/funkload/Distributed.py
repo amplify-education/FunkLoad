@@ -518,6 +518,8 @@ class DistributionMgr(threading.Thread):
 
     def correlate_statistics(self):
         result_path = None
+        if not self.monitor_hosts:
+            return
         for worker, results in self._worker_results.items():
             files = glob("%s/%s-*.xml" % (self.distribution_output,
                                           worker.host))
