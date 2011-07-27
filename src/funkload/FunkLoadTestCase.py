@@ -885,7 +885,6 @@ class FunkLoadTestCase(unittest.TestCase):
             metadata['result'] = 'Error'
             metadata['traceback'] = ' '.join(
                 traceback.format_exception(*sys.exc_info()))
-            print metadata['traceback']
 
         finally:
             if not ok and self._stop_on_fail:
