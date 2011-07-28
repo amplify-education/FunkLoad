@@ -513,4 +513,31 @@ def get_apdex_label(score):
     return "Excellent"
 
 
+class CycleBoundaries(object):
+    """
+    Stores information needed to determine what cycles were active at a given point in
+    time
+    """
+    def __init__(self):
+        self.cycles = defaultdict(lambda: (float('inf'), float('-inf')))
 
+    def add(self, cycle, time, duration):
+        """
+        Record an observation of a test from a single cycle
+        """
+        cycle = int(cycle)
+        time = float(time)
+        duration = float(duration)
+        cur_start, cur_end = self.cycles[cycle]
+        self.cycles[cycle] = (min(cur_start, time), max(cur_end, time+duration))
+
+    def containing_cycles(self, time):
+        """
+        Return a list of all cycles that had active tests at this point in time
+        """
+        time = float(time)
+        return [
+            cycle_idx
+            for cycle_idx, (start, end) in self.cycles.items()
+            if start <= time <= end
+        ]

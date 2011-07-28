@@ -63,7 +63,7 @@ from optparse import OptionParser, TitledHelpFormatter
 from tempfile import NamedTemporaryFile
 from shutil import copyfile
 
-from ReportStats import StatsAccumulator, MonitorStat, ErrorStat
+from ReportStats import StatsAccumulator, MonitorStat, ErrorStat, CycleBoundaries
 from MergeResultFiles import MergeResultFiles
 from funkload.reports.bench import BenchReport
 from funkload.reports.diff import DiffReport
@@ -90,6 +90,7 @@ class FunkLoadXmlParser:
         self.current_element = [{'name': 'root'}]
         self.is_recording_cdata = False
         self.current_cdata = ''
+        self.cycle_boundaries = CycleBoundaries()
 
         self.cycles = None
         self.cycle_duration = 0
@@ -185,6 +186,7 @@ class FunkLoadXmlParser:
                 error = None
 
             def add_record(key, value):
+                self.cycle_boundaries.add(cycle, time, duration)
                 self.stats[key][value][cycle].add_record(
                     time,
                     duration,
@@ -326,7 +328,9 @@ def main():
         
         report = BenchReport(xml_parser.config, xml_parser.stats,
                              xml_parser.monitor,
-                             xml_parser.monitorconfig, options)
+                             xml_parser.monitorconfig,
+                             xml_parser.cycle_boundaries,
+                             options)
 
     if options.html:
         trace('Creating {type} ...\n'.format(type=report.__class__.__name__))

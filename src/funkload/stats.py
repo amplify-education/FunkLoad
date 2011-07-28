@@ -48,12 +48,11 @@ class StatsWriterThread(threading.Thread):
 
 class StatsCollectionThread(threading.Thread):
 
-    def __init__(self, host, port, interval, monitor_key=None):
+    def __init__(self, host, port, interval):
         threading.Thread.__init__(self)
         self.interval = interval
         self.server = ServerProxy("http://%s:%s" % (host, port))
         self.shutdown_event = threading.Event()
-        self.monitor_key = monitor_key
         self.host = host
         self.port = port
 
@@ -71,9 +70,6 @@ class StatsCollectionThread(threading.Thread):
         else:
             trace(' done.\n')
 
-    def set_monitor_key(self, key):
-        self.monitor_key = key
-
     def shutdown(self):
         self.shutdown_event.set()
 
@@ -85,10 +81,6 @@ class StatsCollectionThread(threading.Thread):
             # Get the record from the monitored server
             record = self.server.getRecord()
 
-            if self.monitor_key:
-                # Add the monitor key to what we get back from the monitor server
-                record['key'] = self.monitor_key
-
             # The deque is threadsafe, so append away
             stats_queue.put(('monitor', [], record))
 
@@ -98,21 +90,17 @@ class StatsCollectionThread(threading.Thread):
 
 class StatsCollector(object):
 
-    def __init__(self, monitor_hosts, output_dir=".", config={}, interval=0.5, monitor_key=None):
+    def __init__(self, monitor_hosts, output_dir=".", config={}, interval=0.5):
         self.monitor_threads = []
         for (host, port, desc) in monitor_hosts:
             try:
                 self.monitor_threads.append(
-                    StatsCollectionThread(host, port, interval, monitor_key))
+                    StatsCollectionThread(host, port, interval))
             except SocketError:
                 pass
 
         output_file_path = os.path.join(output_dir, "stats.xml")
         self.stats_writer_thread = StatsWriterThread(output_file_path, config)
-
-    def set_monitor_key(self, key):
-        for t in self.monitor_threads:
-            t.set_monitor_key(key)
 
     def __enter__(self):
         # First, get the writer started

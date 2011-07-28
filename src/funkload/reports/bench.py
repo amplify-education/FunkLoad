@@ -48,14 +48,19 @@ class BenchReport(object):
     `monitorconfig`: dict
         A dictionary containing monitor config data
 
+    `cycle_boundaries`: :py:obj:`funkload.ReportStats.CycleBoundaries`
+        A CycleBoundaries object that can be queried to find out what test cycles
+        were active at a particular point in time
+    
     `options`:
         An options object (as returned by optparse)
     """
-    def __init__(self, config, stats, monitor, monitorconfig, options):
+    def __init__(self, config, stats, monitor, monitorconfig, cycle_boundaries, options):
         self.config = config
         self.stats = stats
         self.monitor = monitor
         self.monitorconfig = monitorconfig
+        self.cycle_boundaries = cycle_boundaries
         self.options = options
         self.rst = []
         self.image_paths = {}
@@ -202,14 +207,14 @@ class BenchReport(object):
         """Create monitrored server charts."""
         stats = self.monitor[host]
         times = []
-        cvus_list = []
         for stat in stats:
-            test, cycle, cvus = stat.key.split(':')
-            stat.cvus=cvus
+            cycles = self.cycle_boundaries.containing_cycles(stat.time)
+            if cycles:
+                stat.cvus = max([self.cycles[cycle] for cycle in cycles])
+            else:
+                stat.cvus = 0
             date = datetime.fromtimestamp(float(stat.time))
             times.append(date.strftime("%H:%M:%S"))
-            #times.append(int(float(stat.time))) # - time_start))
-            cvus_list.append(cvus)
 
         Plugins = MonitorPlugins()
         Plugins.registerPlugins()

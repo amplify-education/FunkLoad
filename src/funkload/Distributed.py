@@ -21,19 +21,13 @@ import platform
 import re
 import socket
 import threading
-import time
 from datetime import datetime
-from socket import error as SocketError
 from stat import S_ISREG, S_ISDIR
-from glob import glob
-from stat import S_ISREG, S_ISDIR
-from xml.etree.ElementTree import ElementTree
 
 import paramiko
 
 from stats import StatsCollector
-from utils import mmn_encode, trace, package_tests, get_virtualenv_script, \
-                  get_version
+from utils import mmn_encode, trace, package_tests, get_virtualenv_script
 
 
 def load_unittest(test_module, test_class, test_name, options):
@@ -476,7 +470,6 @@ class DistributionMgr(threading.Thread):
                 trace("\n")
 
         self.final_collect()
-        self.correlate_statistics()
 
     def final_collect(self):
         expr = re.compile("Log\s+xml:\s+(.*?)\n")
@@ -491,71 +484,3 @@ class DistributionMgr(threading.Thread):
                 worker.get(remote_file, local_file)
                 trace("* Received bench log from [%s] into %s\n" % (
                     worker.host, local_file))
-
-    def _calculate_time_skew(self, results, stats):
-        def min_time(vals):
-            keyfunc = lambda elem: float(elem.attrib['time'])
-            return keyfunc(min(vals, key=keyfunc))
-
-        results_min = min_time(results)
-        monitor_min = min_time(stats)
-
-        return results_min / monitor_min
-
-    def _calculate_results_ranges(self, results):
-        seen = []
-        times = {}
-        for element in results:
-            cycle = int(element.attrib['cycle'])
-            if cycle not in seen:
-                seen.append(cycle)
-
-                cvus = int(element.attrib['cvus'])
-                start_time = float(element.attrib['time'])
-                times[start_time] = (cycle, cvus)
-
-        return times
-
-    def correlate_statistics(self):
-        result_path = None
-        if not self.monitor_hosts:
-            return
-        for worker, results in self._worker_results.items():
-            files = glob("%s/%s-*.xml" % (self.distribution_output,
-                                          worker.host))
-            if files:
-                result_path = files[0]
-                break
-
-        if not result_path:
-            trace("* No output files found; unable to correlate stats.\n")
-            return
-
-        # Calculate the ratio between results and monitoring
-        results_tree = ElementTree(file=result_path)
-        stats_path = os.path.join(self.distribution_output, "stats.xml")
-        stats_tree = ElementTree(file=stats_path)
-
-        results = results_tree.findall("record")
-        stats = stats_tree.findall("monitor")
-        ratio = self._calculate_time_skew(results, stats)
-
-        # Now that we have the ratio, we can calculate the sessions!
-        times = self._calculate_results_ranges(results)
-        times_desc = sorted(times.keys(), reverse=True)
-
-        # Now, parse the stats tree and update values
-        def find_range(start_time):
-            for time_ in times_desc:
-                if start_time > time_:
-                    return times[time_]
-            else:
-                return times[time_]
-
-        for stat in stats:
-            adj_time = float(stat.attrib['time']) * ratio
-            cycle, cvus = find_range(adj_time)
-            stat.set('key', ":%d:%d" % (cycle, cvus*len(self._workers)))
-
-        stats_tree.write(stats_path)
-        trace("* Writing updated stats XML to %s\n" % stats_path)

@@ -270,7 +270,7 @@ class BenchRunner:
         trace('\n')
         config = self._config_tag()
         config['stats_only'] =  True
-        with StatsCollector(self.monitor_hosts, config=config) as collector:
+        with StatsCollector(self.monitor_hosts, config=config):
             for cvus in self.cycles:
                 t_start = time.time()
                 reset_cycle_results()
@@ -280,7 +280,6 @@ class BenchRunner:
                 trace("* setUpCycle hook: ...")
                 self.test.setUpCycle()
                 trace(' done.\n')
-                collector.set_monitor_key('%s:%s:%s' % (self.method_name, cycle, cvus))
                 self.startThreads(cycle, cvus)
                 self.logging()
                 #self.dumpThreads()
