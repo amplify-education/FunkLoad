@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from xml.sax.saxutils import XMLGenerator
 from funkload.utils import get_version
 from datetime import datetime
+from threading import RLock
 
 loggers = {}
 
@@ -31,26 +32,31 @@ class XmlLogger(object):
             os.rename(path, path + '.bak-' + str(load_time))
         self.output = open(path, 'w')
         self.xml_gen = XMLGenerator(self.output, 'utf-8')
+        self.lock = RLock()
 
     def start_log(self, tag, attributes):
         self.doc_tag = tag
-        self.xml_gen.startDocument()
-        self.xml_gen.startElement(tag, attributes)
+        with self.lock:
+            self.xml_gen.startDocument()
+            self.xml_gen.startElement(tag, attributes)
 
     def end_log(self):
-        self.xml_gen.endElement(self.doc_tag)
-        self.xml_gen.endDocument()
+        with self.lock:
+            self.xml_gen.endElement(self.doc_tag)
+            self.xml_gen.endDocument()
 
     @contextmanager
     def element(self, name, attrs={}):
-        attrs = dict((key, str(value)) for key, value in attrs.items())
-        self.text('\n')
-        self.xml_gen.startElement(name, attrs)
-        yield
-        self.xml_gen.endElement(name)
+        with self.lock:
+            attrs = dict((key, str(value)) for key, value in attrs.items())
+            self.text('\n')
+            self.xml_gen.startElement(name, attrs)
+            yield
+            self.xml_gen.endElement(name)
 
     def text(self, text):
-        self.xml_gen.characters(str(text))
+        with self.lock:
+            self.xml_gen.characters(str(text))
 
 class ResultsLogger(object):
     def __init__(self, path):
