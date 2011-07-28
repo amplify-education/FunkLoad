@@ -178,12 +178,15 @@ class MergeResultFiles:
         trace("cycles for a node:    %s\n" % node_cycles)
         trace("cycles for all nodes: %s\n" % cycles)
 
+        config = xml_parser.config.copy()
+        config['cycles'] = json.dumps(cycles)
+
         with open(output_file, 'w+') as output:
             output.write('<funkload version="{version}" time="{time}">\n'.format(
                 version=xml_parser.fl_version,
                 time=xml_parser.fl_time
             ))
-            for key, value in xml_parser.config.iteritems():
+            for key, value in config.iteritems():
                 output.write(tostring(Element('config', key=key, value=value)))
                 output.write('\n')
 
