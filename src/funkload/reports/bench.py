@@ -225,10 +225,15 @@ class BenchReport(object):
             image_prefix = gnuplot_scriptpath(report_dir, '%s_%s' % (host, plugin.name))
             data_prefix = gnuplot_scriptpath(report_dir, '%s_%s' % (host, plugin.name))
             gplot_path = str(os.path.join(report_dir, '%s_%s.gplot' % (host, plugin.name)))
-            r=plugin.gnuplot(times, host, image_prefix, data_prefix, gplot_path, [640, 540], stats)
-            if r!=None:
+            results = plugin.gnuplot(times, host, image_prefix, data_prefix, gplot_path, [640, 540], stats)
+
+            if results != None:
                 gnuplot(gplot_path)
-                charts.extend(r)
+                charts.extend(
+                    (name, path.replace(report_dir, '.'))
+                    for (name, path) in results
+                )
+
         return charts
 
     def render_charts(self, report_dir):
