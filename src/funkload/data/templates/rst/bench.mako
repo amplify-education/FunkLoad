@@ -165,6 +165,7 @@ ${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
 <%rst:title>Monitored hosts</%rst:title>
 <%block name="monitors">
 % for host in monitor_hosts:
+% if host in image_paths:
 <%rst:title level="${2}">${host}: ${config.get(host, '')}</%rst:title>
 % for chart_title, chart_image in image_paths[host]:
 **${chart_title}**
@@ -172,6 +173,7 @@ ${render_aggregate_stats(aggregate, aggregate_stats[aggregate], stats)}
 .. image:: ${chart_image}
 
 % endfor
+% endif
 % endfor
 </%block>
 % endif
