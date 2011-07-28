@@ -68,7 +68,7 @@ setup(
                         'docutils >= 0.3.7',
                         'setuptools',
                         'psutil',
-                        'mako >= 0.4.1'],
+                        'Mako >= 0.4.1'],
     zip_safe=True,
     package_data={'funkload': ['data/templates/gnuplot/*', 'data/templates/rst/*',
                                'data/templates/*.mako',
