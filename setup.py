@@ -28,7 +28,7 @@ except ImportError:
     ez_setup.use_setuptools()
     from setuptools import setup, find_packages
 
-__version__ = '1.16.1'
+__version__ = '1.17.0'
 
 setup(
     name="funkload",
