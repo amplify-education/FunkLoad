@@ -358,7 +358,7 @@ class DistributionMgr(threading.Thread):
                 self.remote_res_dir, self.tarred_testsdir)
 
             if worker.isdir(virtual_env):
-                worker.execute("rmdir -rf %s" % virtual_env)
+                worker.execute("rm -rf %s" % virtual_env)
 
             worker.execute("mkdir -p %s" % virtual_env)
             worker.put(
