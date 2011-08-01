@@ -161,7 +161,7 @@ class MergeResultFiles:
             trace (".")
             xml_parser.parse(input_file)
 
-        node_count = len(xml_parser.files) - xml_parser.stats_files
+        node_count = len(input_files) - xml_parser.stats_files
 
         # compute cumulated cycles
         node_cycles = xml_parser.cycles
