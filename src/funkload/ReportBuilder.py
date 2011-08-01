@@ -180,7 +180,7 @@ class FunkLoadXmlParser:
 
             if not successful:
                 error = ErrorStat(result=result,
-                    code=attrs.get('code'), headers=attrs.get('headers'),
+                    code=attrs.get('response_code'), headers=attrs.get('headers'),
                     body=attrs.get('body'), traceback=attrs.get('traceback'))
             else:
                 error = None
