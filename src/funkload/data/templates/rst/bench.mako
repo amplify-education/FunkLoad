@@ -64,10 +64,10 @@ ${render_stats_table(stats_columns, stats, title)}
 % for error, count in sorted(cycle_stats.error_details.items()):
 - error${error_ids[error]}_: ${count}
 % endfor
+
 % endif
 % endfor
 % endif
-
 </%def>
 
 <%def name="render_aggregate_stats(name, aggregated_stats, substats)">
@@ -87,24 +87,26 @@ ${render_stats(stat_name, (aggregate_name, stat_name), stats, 2)}
 <%def name="error_details()">
 % for index, error in enumerate(sorted(unique_errors)):
 .. _error${index}:
+
 <%rst:title level="${2}">Error ${index}</%rst:title>
 
 % if error.code >= 0:
 <%rst:title level="${3}">Http Response</%rst:title>
+<%rst:literal_block>\
 HTTP ${error.code}
 % if error.headers:
 ${error.headers}
 % endif
+
 % if error.body:
 ${error.body}
 % endif
+</%rst:literal_block>
 % endif
 
 % if error.traceback:
 <%rst:title level="${3}">Traceback</%rst:title>
-<%rst:literal_block>
-${error.traceback}
-</%rst:literal_block>
+<%rst:literal_block>${error.traceback}</%rst:literal_block>
 % endif
 
 % endfor

@@ -1,16 +1,15 @@
 
-<%def name="literal_block()">
+<%def name="literal_block()">\
 ::
-<%self:indented>
-${caller.body()}
-</%self:indented>
+
+<%self:indented>${caller.body()}</%self:indented>
 </%def>
 
-<%def name="indented(amount=4)">
+<%def name="indented(amount=4)">\
 ${' '*amount + ('\n' + ' '*amount).join(capture(caller.body).split('\n'))}
 </%def>
 
-<%def name="title(level=1)">
+<%def name="title(level=1)">\
 <%
     rst_level = ['=', '=', '-', '~', '^']
     char = rst_level[level]
