@@ -424,6 +424,7 @@ class DistributionMgr(threading.Thread):
 
         [k.start() for k in threads]
         [k.join() for k in threads]
+        os.remove(self.tarred_tests)
         trace("\n")
         if not self._workers:
             raise RuntimeError("no workers available for distribution")
