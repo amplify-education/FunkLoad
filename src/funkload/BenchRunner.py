@@ -380,9 +380,11 @@ class BenchRunner:
         trace("* Logging for %ds (until %s): " % (
             duration, datetime.fromtimestamp(end_time).isoformat()))
         set_recording_flag(True)
-        while time.time() < end_time:
+        now = time.time()
+        while now < end_time:
             # wait
-            time.sleep(1)
+            time.sleep(max(end_time - now, 1))
+            now = time.time()
         set_recording_flag(False)
         trace(" done.\n")
 
