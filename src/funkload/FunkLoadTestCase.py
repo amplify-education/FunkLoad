@@ -792,8 +792,6 @@ class FunkLoadTestCase(unittest.TestCase):
         info['thread_id'] = str(self.thread_id)
         info['suite_name'] = str(self.suite_name)
         info['test_name'] = str(self.test_name)
-        if self.in_bench_mode and not recording():
-            info['startup'] = True
         start_time = time.time()
         try:
             metadata['result'] = 'Successful'
@@ -807,6 +805,8 @@ class FunkLoadTestCase(unittest.TestCase):
                 traceback.format_exception(*sys.exc_info()))
             raise
         finally:
+            if self.in_bench_mode and not recording():
+                info['startup'] = True
             info['time'] = str(start_time)
             info['duration'] = str(time.time() - start_time)
             self.logger_results.record(info, metadata, aggregates)
