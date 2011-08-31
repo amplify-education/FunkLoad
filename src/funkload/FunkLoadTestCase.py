@@ -747,8 +747,6 @@ class FunkLoadTestCase(unittest.TestCase):
                 metadata['result'] = 'Failure'
                 metadata['response_code'] = exc.response.code
                 raise self.failureException, str(exc.response)
-            except SocketError:
-                raise SocketError("Can't load %s." % url)
 
     @contextmanager
     def record(self, aggregates, **metadata):
