@@ -140,7 +140,7 @@ class BenchReport(object):
             The key used to identify this result. Is hashed to generate a filename
 
         `stats`:
-            A StatsAccumulator or StatsAggregator to generate the chart from
+            A map of cycle to StatsAccumulator or StatsAggregator to generate the chart from
 
         `report_dir`:
             The directory to write the data, gnuplot, and image files
