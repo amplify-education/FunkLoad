@@ -45,6 +45,7 @@ from webunit.IMGSucker import IMGSucker
 from webunit.webunittest import WebTestCase, WebFetcher
 from webunit.webunittest import HTTPResponse, HTTPError, VERBOSE
 from webunit.utility import Upload
+from webunit.cookie import Cookie, Error
 
 from utils import thread_sleep, Data
 import re
@@ -444,3 +445,71 @@ def HR___repr__(self):
 
 HTTPResponse.__repr__ = HR___repr__
 
+def decodeCookies(url, server, headers, cookies):
+    '''Decode cookies into the supplied cookies dictionary
+
+    Relevant specs:
+    http://www.ietf.org/rfc/rfc2109.txt
+    http://www.ietf.org/rfc/rfc2965.txt
+    '''
+    # the path of the request URL up to, but not including, the right-most /
+    request_path = urlparse.urlparse(url)[2]
+    if len(request_path) > 1 and request_path[-1] == '/':
+        request_path = request_path[:-1]
+
+    hdrcookies = Cookie.SimpleCookie("\n".join(map(lambda x: x.strip(), 
+        headers.getallmatchingheaders('set-cookie'))))
+    for cookie in hdrcookies.values():
+        # XXX: there doesn't seem to be a way to determine if the
+        # cookie was set or defaulted to an empty string :(
+        if cookie['domain']:
+            domain = cookie['domain']
+
+            # reject if The value for the Domain attribute contains no
+            # embedded dots or does not start with a dot.
+            if '.' not in domain:
+                raise Error, 'Cookie domain "%s" has no "."'%domain
+            if domain[0] != '.':
+                # per RFC2965 cookie domains with no leading '.' will have
+                # one added
+                domain = '.' + domain
+            # reject if the value for the request-host does not
+            # domain-match the Domain attribute.
+            # For cookie .example.com we should allow:
+            #  - example.com
+            #  - www.example.com
+            # but not:
+            #  - someexample.com
+            if not server.endswith(domain) and domain[1:] != server:
+                raise Error, 'Cookie domain "%s" doesn\'t match '\
+                    'request host "%s"'%(domain, server)
+            # reject if the request-host is a FQDN (not IP address) and
+            # has the form HD, where D is the value of the Domain
+            # attribute, and H is a string that contains one or more dots.
+            if re.search(r'[a-zA-Z]', server):
+                H = server[:-len(domain)]
+                if '.' in H:
+                    raise Error, 'Cookie domain "%s" too short '\
+                    'for request host "%s"'%(domain, server)
+        else:
+            domain = server
+
+        # path check
+        path = cookie['path'] or request_path
+        # reject if Path attribute is not a prefix of the request-URI
+        # (noting that empty request path and '/' are often synonymous, yay)
+        if not (request_path.startswith(path) or (request_path == '' and
+                cookie['path'] == '/')):
+            raise Error, 'Cookie path "%s" doesn\'t match '\
+                'request url "%s"'%(path, request_path)
+
+        bydom = cookies.setdefault(domain, {})
+        bypath = bydom.setdefault(path, {})
+
+        maxage = cookie.get('max-age', '1')
+        if maxage != '0':
+            bypath[cookie.key] = cookie
+        elif cookie.key in bypath:
+            del bypath[cookie.key]
+
+cookie.decodeCookies = decodeCookies
