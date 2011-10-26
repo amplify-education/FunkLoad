@@ -495,7 +495,9 @@ def decodeCookies(url, server, headers, cookies):
             domain = server
 
         # path check
-        path = cookie['path'] or request_path
+        # According to http://www.w3.org/Protocols/rfc2109/rfc2109, Path defaults to the request
+        # path, up to but not including the right-most /
+        path = cookie['path'] or request_path[:request_path.rfind('/')]
         # reject if Path attribute is not a prefix of the request-URI
         # (noting that empty request path and '/' are often synonymous, yay)
         if not (request_path.startswith(path) or (request_path == '' and
