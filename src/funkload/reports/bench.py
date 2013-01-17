@@ -132,7 +132,7 @@ class BenchReport(object):
                  'MonitorNetwork': MonitorNetwork(None).getConfig(),
                  'MonitorCUs': MonitorCUs().getConfig() }
 
-    def createResultChart(self, key, stats, report_dir):
+    def createResultChart(self, key, stats, report_dir, path_resolver):
         """
         Create a single result chart using a specified key and report directory
 
@@ -201,9 +201,9 @@ class BenchReport(object):
             ))
         gnuplot(gplot_path)
 
-        return image_name
+        return path_resolver(image_name)
 
-    def createMonitorChart(self, host, report_dir):
+    def createMonitorChart(self, host, report_dir, path_resolver):
         """Create monitrored server charts."""
         stats = self.monitor[host]
         times = []
@@ -230,13 +230,13 @@ class BenchReport(object):
             if results != None:
                 gnuplot(gplot_path)
                 charts.extend(
-                    (name, path.replace(report_dir, '.'))
+                    (name, path_resolver(path.replace(report_dir, '.')))
                     for (name, path) in results
                 )
 
         return charts
 
-    def render_charts(self, report_dir):
+    def render_charts(self, report_dir, path_resolver=None):
         """
         Create all the charts for the report.
 
@@ -245,17 +245,18 @@ class BenchReport(object):
 
         charts={}
 
+        path_resolver = path_resolver or (lambda x: x)
         # Create all monitored server charts
         for host in self.monitor.keys():
-            charts[host]=self.createMonitorChart(host, report_dir)
+            charts[host]=self.createMonitorChart(host, report_dir, path_resolver)
 
         # Create all aggregate and breakout results charts
         for group_name, grouped_stats in self.stats.items():
             for value, cycle_stats in grouped_stats.items():
                 key = group_name, value
-                charts[key] = self.createResultChart(key, cycle_stats, report_dir)
+                charts[key] = self.createResultChart(key, cycle_stats, report_dir, path_resolver)
         
         for group_name, aggregate_stats in self.aggr_stats.items():
-            charts[group_name] = self.createResultChart(group_name, aggregate_stats, report_dir)
+            charts[group_name] = self.createResultChart(group_name, aggregate_stats, report_dir, path_resolver)
         
         return charts
