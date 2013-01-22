@@ -27,23 +27,28 @@ class StatsWriterThread(threading.Thread):
         for key, value in self._config.items():
             self.logger.config(key, value)
 
-        while 1:
-            if self.shutdown_event.isSet():
-                break
+        is_shutting_down = False
+        try:
+            while 1:
+                if self.shutdown_event.isSet():
+                    is_shutting_down = True
+                    break
 
-            # Get the record from the queue...
-            try:
-                fn, args, kwargs = stats_queue.get(timeout=2.0)
-            except Empty:
-                continue
+                # Get the record from the queue...
+                try:
+                    fn, args, kwargs = stats_queue.get(timeout=2.0)
+                except Empty:
+                    continue
 
-            # Write it out the stats file
-            getattr(self.logger, fn)(*args, **kwargs)
+                # Write it out the stats file
+                getattr(self.logger, fn)(*args, **kwargs)
 
-            # Its always important to let the queue know we finished a task!
-            stats_queue.task_done()
-
-        self.logger.end_log()
+                # Its always important to let the queue know we finished a task!
+                stats_queue.task_done()
+        finally:
+            self.logger.end_log()
+            if is_shutting_down:
+                self.logger.xml_logger.output.flush()
 
 
 class StatsCollectionThread(threading.Thread):

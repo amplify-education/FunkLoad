@@ -224,6 +224,7 @@ class BenchRunner:
                              mmn_encode(method_name, 0, 0, 0), options)
         self.config_path = test._config_path
         self.result_path = test.result_path
+        self.result_dir = os.path.dirname(self.result_path)
         self.class_title = test.conf_get('main', 'title')
         self.class_description = test.conf_get('main', 'description')
         self.test_id = self.method_name
@@ -270,7 +271,7 @@ class BenchRunner:
         trace('\n')
         config = self._config_tag()
         config['stats_only'] =  True
-        with StatsCollector(self.monitor_hosts, config=config):
+        with StatsCollector(self.monitor_hosts, output_dir=self.result_dir, config=config):
             for cvus in self.cycles:
                 t_start = time.time()
                 reset_cycle_results()
