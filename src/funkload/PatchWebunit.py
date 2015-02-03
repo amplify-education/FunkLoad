@@ -170,6 +170,59 @@ def WTC_log(self, message, content):
     pass
 WebTestCase.log = WTC_log
 
+
+class FixedCookie(Cookie.SimpleCookie):
+    """
+    Hackish but successful patch from http://bugs.python.org/issue3073
+    This is a more liberal parser than the self-described "liberal" parser
+    included in the latest version of Cookie.py: if support for other date
+    formats is desired (e.g. ANSI C or RFC850) it might be useful to apply
+    this patch more broadly.  As it stands, it will be applied in all cases
+    where FIXED_VERSION is greater than sys.hexversion.
+    """
+    FIXED_VERSION = 0x020705F0 # apply this patch for python < 2.7.5
+    _LegalCharsPatt = r"\w\d!#%&'~_`><@,:/\$\*\+\-\.\^\|\)\(\?\}\{\="
+    _FixedCookiePattern = re.compile(
+        r"(?x)"                       # This is a Verbose pattern
+        r"(?P<key>"                   # Start of group 'key'
+        "[" + _LegalCharsPatt + "]+?"   # Any word of at least one letter, nongreedy
+        r")"                          # End of group 'key'
+        r"\s*=\s*"                    # Equal Sign
+        r"(?P<val>"                   # Start of group 'val'
+        r'"(?:[^\\"]|\\.)*"'            # Any doublequoted string
+        r"|"                            # or
+        "[" + _LegalCharsPatt + "\ ]*"  # Any word or empty string
+        r")"                          # End of group 'val'
+        r"\s*;?"                      # Probably ending in a semi-colon
+    )
+
+    def load(self, rawdata):
+        """Load cookies from a string (presumably HTTP_COOKIE) or
+        from a dictionary.  Loading cookies from a dictionary 'd'
+        is equivalent to calling:
+            map(Cookie.__setitem__, d.keys(), d.values())
+        """
+        if type(rawdata) == type(""):
+            self._BaseCookie__ParseString(rawdata, FixedCookie._FixedCookiePattern)
+        else:
+            self.update(rawdata)
+        return
+
+    @classmethod
+    def applies(cls, python_version=sys.hexversion):
+        """
+        Return True if the passed-in (default: currently executing) version
+        of Python is one that requires the use of FixedCookie instead of
+        Cookie.SimpleCookie.
+        """
+        return python_version < cls.FIXED_VERSION
+
+if FixedCookie.applies():
+    COOKIE_CLASS = FixedCookie
+else:
+    COOKIE_CLASS = Cookie.SimpleCookie
+
+
 def decodeCookies(url, server, headers, cookies):
     """Decode cookies into the supplied cookies dictionary,
     according to RFC 6265.
@@ -187,11 +240,10 @@ def decodeCookies(url, server, headers, cookies):
         request_path = request_path[:-1]
     else:
         request_path = '/'
-
     # XXX - tried slurping all the set-cookie and joining them on
     # '\n', some cookies were not parsed. This below worked flawlessly.
     for ch in headers.getallmatchingheaders('set-cookie'):
-        cookie = Cookie.SimpleCookie(ch.strip()).values()[0]
+        cookie = COOKIE_CLASS(ch.strip()).values()[0]
 
         # see rfc 6265, section 5.3, step 7
         path = cookie['path'] or request_path
