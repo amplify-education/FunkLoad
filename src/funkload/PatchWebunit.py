@@ -223,6 +223,17 @@ else:
     COOKIE_CLASS = Cookie.SimpleCookie
 
 
+# Date Formats (for more details, see docstring in decodeCookies)
+# rfc1123-date (see RFC2616, Section 3.3.1)
+FORMAT_RFC1123 = "%a, %d %b %Y %H:%M:%S GMT"
+# Original Netscape cookie date variant (see RFC2109, Section 10.1.2)
+FORMAT_NETSCAPE = "%a, %d-%b-%y %H:%M:%S GMT"
+
+# Unsupported formats, for reference
+# FORMAT_RFC850 = "%A, %d-%b-%y %H:%M:%S GMT"
+# FORMAT_ANSI = "%a %b %d %H:%M:%S %Y" # NOTE: for strftime, %d would become %e
+
+
 def decodeCookies(url, server, headers, cookies):
     """Decode cookies into the supplied cookies dictionary,
     according to RFC 6265.
@@ -231,6 +242,17 @@ def decodeCookies(url, server, headers, cookies):
     http://www.ietf.org/rfc/rfc2109.txt (obsolete)
     http://www.ietf.org/rfc/rfc2965.txt (obsolete)
     http://www.ietf.org/rfc/rfc6265.txt (proposed standard)
+
+    A note on date parsing: RFC 6265 declares the date format to be the
+    rfc1123-date defined in Section 3.3.1 of RFC 2616
+    (https://www.ietf.org/rfc/rfc2616.txt).  However, the older RFC 2109 points
+    out (in section 10.1.2) the existence of older servers that use the
+    original Netscape Cookie date format (""Wdy, DD-Mon-YY HH:MM:SS GMT").  In
+    order to maximize compatibility, both formats are supported here.
+
+    RFC 2616 also mentions the RFC850 and ANSI C date formats as being commonly
+    used by older servers, but they are nowhere mentioned in any Cookie-related
+    specification, so they are not supported by this function.
     """
     # see rfc 6265, section 5.1.4
     # empty path => '/'
@@ -275,7 +297,15 @@ def decodeCookies(url, server, headers, cookies):
             if cookie['expires'] == '':
                 expire = datetime.datetime.max
             else:
-                expire = datetime.datetime.strptime(cookie['expires'],"%a, %d-%b-%Y %H:%M:%S %Z")
+                expires_string = cookie['expires']
+                for time_format in [FORMAT_RFC1123, FORMAT_NETSCAPE]:
+                    try:
+                        expire = datetime.datetime.strptime(expires_string, time_format)
+                    except ValueError:
+                        continue
+                    break
+                else:
+                    raise ValueError("No time format matched '%s'" % expires_string)
 
         cookie['expires'] = expire
         bydom = cookies.setdefault(domain, {})
