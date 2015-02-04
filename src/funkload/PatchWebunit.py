@@ -222,6 +222,9 @@ if FixedCookie.applies():
 else:
     COOKIE_CLASS = Cookie.SimpleCookie
 
+# This apparently pointless call to strptime is actually preventing a
+# painful race condition for fl-run-bench: http://bugs.python.org/issue7980
+_EPOCH = datetime.datetime.strptime("1970 GMT", "%Y %Z")
 
 # Date Formats (for more details, see docstring in decodeCookies)
 # rfc1123-date (see RFC2616, Section 3.3.1)
